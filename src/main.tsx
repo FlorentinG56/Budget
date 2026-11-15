@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App'
+import { memoriserEnregistrement } from './miseAJour'
 import { VerrouProvider } from './lock/Verrou'
 import './index.css'
 
@@ -13,6 +14,7 @@ if (import.meta.env.PROD) {
     immediate: true,
     onRegisteredSW(_url, enregistrement) {
       if (!enregistrement) return
+      memoriserEnregistrement(enregistrement)
       const verifier = () => { void enregistrement.update().catch(() => { /* hors connexion */ }) }
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') verifier() })
       setInterval(verifier, 60 * 60 * 1000)

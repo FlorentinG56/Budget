@@ -12,6 +12,7 @@ import { ListeCategories } from './reglages/Categories'
 import { ListeComptes } from './reglages/Comptes'
 import { ListeRecurrences } from './reglages/Recurrences'
 import { CHOIX_DELAI_VERROUILLAGE } from '../security/verrouillage'
+import { rechercherMiseAJour, type ResultatMiseAJour } from '../miseAJour'
 
 function Groupe({ children }: { children: ReactNode }) {
   return <div className="divide-y divide-trait overflow-hidden rounded-carte bg-white shadow-carte">{children}</div>
@@ -38,6 +39,8 @@ export function Reglages() {
   const nav = useNav()
   const [modal, setModal] = useState<Modal>(null)
   const [persistant, setPersistant] = useState<boolean | null>(null)
+  const [maj, setMaj] = useState<ResultatMiseAJour | 'recherche' | null>(null)
+  const texteMaj = { recherche: 'Recherche…', a_jour: 'Déjà à jour ✓', installation: 'Installation…', indisponible: 'Indisponible ici', hors_connexion: 'Hors connexion' }
 
   useEffect(() => { void navigator.storage?.persisted?.().then(setPersistant) }, [])
 
@@ -74,6 +77,8 @@ export function Reglages() {
         <Ligne libelle="App installée" valeur={estInstallee() ? 'Oui' : 'Non (onglet Safari)'} />
         <Ligne libelle="Stockage protégé" valeur={persistant === null ? '…' : persistant ? 'Oui' : 'Non'} />
         <Ligne libelle="Version" valeur={__APP_VERSION__} />
+        <Ligne libelle="Rechercher une mise à jour" valeur={maj ? texteMaj[maj] : undefined}
+          surClic={async () => { setMaj('recherche'); setMaj(await rechercherMiseAJour()) }} />
       </Groupe>
       <p className="px-1 pb-2 text-[13px] leading-snug text-encre-pale">
         Toutes les données restent sur cet iPhone. Supprimer l’icône de l’app efface ses données : pense à faire des sauvegardes (étape 10).
