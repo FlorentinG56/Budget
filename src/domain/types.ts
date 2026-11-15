@@ -44,6 +44,7 @@ export interface Operation {
   sousCategorieId?: string
   note?: string
   recurrenceId?: string
+  partCapital?: Centimes // mensualité de crédit : part qui rembourse le capital
   creeLe: number // horodatage de saisie
 }
 
@@ -65,10 +66,12 @@ export interface Recurrence {
   jours: number[] // mensuel : [jour] ; deux dates : [15, 31] ; 14 jours : inutilisé
   dateDebut: DateISO // pour « 14 jours » : date de référence
   dateFin?: DateISO
-  capitalRestantDu?: Centimes
+  capitalRestantDu?: Centimes // crédit : capital à la date de référence (saisi, modifiable)
+  capitalReferenceDate?: DateISO // date à laquelle capitalRestantDu était exact
+  capitalInitial?: Centimes // pour la barre de progression
   tauxAnnuel?: number // en %, ex. 5.9
   actif: boolean
-  derniereEcheanceGeneree?: DateISO
+  derniereEcheanceGeneree?: DateISO // les échéances jusqu'à cette date (incluse) sont déjà traitées
 }
 
 export interface Categorie {

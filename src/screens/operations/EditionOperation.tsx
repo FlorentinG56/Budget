@@ -39,21 +39,25 @@ export function EditionOperation({ id }: { id: string }) {
   if (op === undefined || !comptes || !categories) return <Page titre="Opération"><div /></Page>
   if (op === null) return <Page titre="Opération"><p className="text-encre-douce">Cette opération n’existe plus.</p></Page>
 
-  const modifiable = op.type === 'depense' || op.type === 'revenu'
+  const modifiable = op.type === 'depense' || op.type === 'revenu' || op.type === 'prelevement_fixe'
+  const avecCategorie = op.type === 'depense' || op.type === 'prelevement_fixe'
   const valeur = analyserMontant(montant)
   const compte = comptes.find((c) => c.id === compteId)
   // Une dépense peut être sur un compte ou sur une carte ; un revenu, sur un compte seulement.
-  const comptesPossibles = comptes.filter((c) => (!c.archive || c.id === op.compteId) && (op.type === 'depense' || c.type !== 'carte_credit'))
+  const comptesPossibles = comptes.filter((c) => (!c.archive || c.id === op.compteId) && (avecCategorie || c.type !== 'carte_credit'))
 
   const enregistrer = async () => {
     if (modifiable && !valeur) return
+    const nouveauMontant = modifiable ? valeur! : op.montant
     await enregistrerOperation({
       ...op,
-      montant: modifiable ? valeur! : op.montant,
+      montant: nouveauMontant,
+      // mensualité de crédit modifiée : la part capital suit la différence
+      partCapital: op.partCapital === undefined ? undefined : Math.max(0, op.partCapital + nouveauMontant - op.montant),
       date: date || op.date,
       compteId: modifiable ? compteId : op.compteId,
-      categorieId: op.type === 'depense' ? categorieId || undefined : op.categorieId,
-      sousCategorieId: op.type === 'depense' ? sousCategorieId || undefined : op.sousCategorieId,
+      categorieId: avecCategorie ? categorieId || undefined : op.categorieId,
+      sousCategorieId: avecCategorie ? sousCategorieId || undefined : op.sousCategorieId,
       note: note.trim() || undefined,
     })
     retour()
@@ -75,7 +79,7 @@ export function EditionOperation({ id }: { id: string }) {
         )}
         <Champ libelle="Date"><Saisie type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Champ>
         {modifiable ? (
-          <Champ libelle={op.type === 'depense' ? 'Compte / carte' : 'Compte'}>
+          <Champ libelle={avecCategorie ? 'Compte / carte' : 'Compte'}>
             <Choix value={compteId} onChange={(e) => setCompteId(e.target.value)}>
               {comptesPossibles.map((c) => <option key={c.id} value={c.id}>{c.nom}</option>)}
             </Choix>
@@ -85,7 +89,13 @@ export function EditionOperation({ id }: { id: string }) {
         )}
       </Groupe>
 
-      {op.type === 'depense' && (
+      {op.type === 'prelevement_fixe' && (
+        <p className="px-1 text-[13px] leading-snug text-encre-pale">
+          Prélèvement automatique. Si la banque l’a décalé, change la date ; s’il n’a pas eu lieu, supprime-le : il ne sera pas recréé.
+        </p>
+      )}
+
+      {avecCategorie && (
         <Groupe>
           <Champ libelle="Catégorie">
             <Choix value={categorieId} onChange={(e) => { setCategorieId(e.target.value); setSousCategorieId('') }}>
@@ -106,13 +116,13 @@ export function EditionOperation({ id }: { id: string }) {
       )}
 
       <Groupe>
-        <Champ libelle={op.type === 'revenu' ? 'Libellé' : 'Note'}>
+        <Champ libelle={op.type === 'revenu' || op.type === 'prelevement_fixe' ? 'Libellé' : 'Note'}>
           <Saisie value={note} onChange={(e) => setNote(e.target.value)} placeholder="Facultatif" />
         </Champ>
       </Groupe>
 
       {!confirmerSuppression ? (
-        <Bouton variante="danger" onClick={() => setConfirmer(true)}>Supprimer l’opération</Bouton>
+        <Bouton variante="danger" onClick={() => setConfirmer(true)}>{op.type === 'prelevement_fixe' ? 'Annuler ce prélèvement' : 'Supprimer l’opération'}</Bouton>
       ) : (
         <div className="flex gap-2">
           <Bouton variante="secondaire" onClick={() => setConfirmer(false)}>Garder</Bouton>

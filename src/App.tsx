@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { BarreOnglets, type Onglet } from './components/BarreOnglets'
 import { Feuille } from './components/Feuille'
-import { initialiserDonnees } from './db/actions'
+import { EcheancesCtx } from './components/BandeauEcheances'
+import { genererEcheances, initialiserDonnees } from './db/actions'
+import type { Operation } from './domain/types'
 import { NavCtx, type Nav } from './nav/Navigation'
 import { SaisieRapide } from './saisie/SaisieRapide'
 import { EcranCreationCode, EcranDeverrouillage } from './lock/EcransVerrou'
@@ -41,9 +43,22 @@ export default function App() {
     retour: () => setPile((p) => p.slice(0, -1)),
   }), [])
 
+  // Prélèvements et revenus automatiques : à l'ouverture, puis à chaque retour au premier plan.
+  const [recentes, setRecentes] = useState<Operation[]>([])
+  const echeances = useMemo(() => ({ recentes, effacer: () => setRecentes([]) }), [recentes])
   useEffect(() => {
-    if (etat === 'deverrouille' && !pret) void initialiserDonnees().then(() => setPret(true))
-  }, [etat, pret])
+    if (etat !== 'deverrouille') return
+    const traiter = async () => {
+      if (!pret) await initialiserDonnees()
+      const creees = await genererEcheances()
+      if (creees.length) setRecentes((r) => [...r, ...creees])
+      setPret(true)
+    }
+    void traiter()
+    const auRetour = () => { if (document.visibilityState === 'visible') void traiter() }
+    document.addEventListener('visibilitychange', auRetour)
+    return () => document.removeEventListener('visibilitychange', auRetour)
+  }, [etat]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     try { sessionStorage.setItem('onglet', onglet) } catch { /* ignoré */ }
@@ -61,6 +76,7 @@ export default function App() {
 
   const Ecran = ECRANS[onglet]
   return (
+    <EcheancesCtx.Provider value={echeances}>
     <NavCtx.Provider value={nav}>
       {pile.length > 0 ? <div key={pile.length}>{pile[pile.length - 1]}</div> : <Ecran />}
       <BarreOnglets actif={onglet} surChoix={(o) => (o === onglet ? setPile([]) : setOnglet(o))}
@@ -69,5 +85,6 @@ export default function App() {
         <SaisieRapide key={numeroSaisie} surFermer={() => setSaisie(false)} />
       </Feuille>
     </NavCtx.Provider>
+    </EcheancesCtx.Provider>
   )
 }

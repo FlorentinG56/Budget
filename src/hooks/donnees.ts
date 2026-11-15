@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, lireReglages } from '../db/db'
-import type { Categorie, Compte, Operation, Reglages } from '../domain/types'
+import type { Categorie, Compte, Operation, Recurrence, Reglages } from '../domain/types'
 
 /** Lectures réactives : l'écran se met à jour tout seul quand la base change. */
 export function useComptes(avecArchives = false): Compte[] | undefined {
@@ -24,4 +24,8 @@ export function useReglages(): Reglages | undefined {
 
 export function indexer<T extends { id: string }>(liste: T[] | undefined): Map<string, T> {
   return new Map((liste ?? []).map((x) => [x.id, x]))
+}
+
+export function useRecurrences(): Recurrence[] | undefined {
+  return useLiveQuery(() => db.recurrences.toArray(), [])
 }

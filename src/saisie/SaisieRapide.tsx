@@ -9,7 +9,7 @@ import type { Categorie, Operation } from '../domain/types'
 import { indexer, useCategories, useComptes, useOperations, useReglages } from '../hooks/donnees'
 import { PaveNumerique } from './PaveNumerique'
 
-type Mode = 'depense' | 'revenu'
+type Mode = 'depense' | 'revenu' | 'virement'
 
 /** Saisie rapide : montant, catégorie, c'est enregistré. Le reste est facultatif. */
 export function SaisieRapide({ surFermer }: { surFermer: () => void }) {
@@ -24,6 +24,8 @@ export function SaisieRapide({ surFermer }: { surFermer: () => void }) {
   const [compteChoisi, setCompteChoisi] = useState<string | null>(null)
   const [moyenChoisi, setMoyenChoisi] = useState<'debit' | 'carte' | null>(null)
   const [libelleRevenu, setLibelleRevenu] = useState('')
+  const [destinationChoisie, setDestinationChoisie] = useState<string | null>(null)
+  const [recu, setRecu] = useState('')
   const [secoue, setSecoue] = useState(false)
   const [enregistree, setEnregistree] = useState<Operation | null>(null)
 
@@ -33,6 +35,10 @@ export function SaisieRapide({ surFermer }: { surFermer: () => void }) {
   const carte = (comptes ?? []).find((c) => c.type === 'carte_credit' && c.compteRemboursementId === compteId)
   const moyen = carte && mode === 'depense' ? (moyenChoisi ?? reglages?.dernierMoyenPaiement ?? 'debit') : 'debit'
   const devise = compte?.devise ?? 'CAD'
+  const destinations = comptesSaisie.filter((c) => c.id !== compteId)
+  const destinationId = destinationChoisie && destinationChoisie !== compteId ? destinationChoisie : destinations[0]?.id
+  const destination = destinations.find((c) => c.id === destinationId)
+  const deviseDiff = !!destination && destination.devise !== devise
 
   const grille = useMemo(
     () => trierParUsage(categories ?? [], operations ?? [], versISO(subDays(new Date(), 90))),
@@ -49,8 +55,18 @@ export function SaisieRapide({ surFermer }: { surFermer: () => void }) {
   const montant = analyserMontant(valeur)
   const refuser = () => { setSecoue(true); navigator.vibrate?.(60); setTimeout(() => setSecoue(false), 420) }
 
+  const montantRecu = deviseDiff ? analyserMontant(recu) : montant
+
   const enregistrer = async (categorie?: Categorie) => {
     if (!montant || !compteId) return refuser()
+    if (mode === 'virement') {
+      if (!destinationId || !montantRecu) return refuser()
+      setEnregistree(await enregistrerOperation({
+        date, montant, type: 'virement', compteId, compteDestinationId: destinationId,
+        montantRecu: deviseDiff ? montantRecu : undefined, note: libelleRevenu.trim() || undefined,
+      }))
+      return
+    }
     const op = await enregistrerOperation({
       date, montant, type: mode,
       compteId: mode === 'depense' && moyen === 'carte' && carte ? carte.id : compteId,
@@ -68,16 +84,16 @@ export function SaisieRapide({ surFermer }: { surFermer: () => void }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="mx-auto flex rounded-[10px] bg-trait/70 p-0.5" role="tablist">
-        {(['depense', 'revenu'] as Mode[]).map((m) => (
+        {(['depense', 'revenu', 'virement'] as Mode[]).map((m) => (
           <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => setMode(m)}
-            className={`min-h-[32px] rounded-[8px] px-5 text-[14px] font-semibold ${mode === m ? 'bg-white text-encre shadow-sm' : 'text-encre-douce'}`}>
-            {m === 'depense' ? 'Dépense' : 'Revenu'}
+            className={`min-h-[32px] rounded-[8px] px-4 text-[14px] font-semibold ${mode === m ? 'bg-white text-encre shadow-sm' : 'text-encre-douce'}`}>
+            {m === 'depense' ? 'Dépense' : m === 'revenu' ? 'Revenu' : 'Virement'}
           </button>
         ))}
       </div>
 
       <div className={`text-center text-[40px] font-bold leading-none tracking-tight ${secoue ? 'animate-secousse' : ''} ${
-        valeur ? (mode === 'revenu' ? 'text-vert' : 'text-encre') : 'text-encre-pale'}`} aria-live="polite">
+        valeur ? (mode === 'revenu' ? 'text-vert' : mode === 'virement' ? 'text-bleu' : 'text-encre') : 'text-encre-pale'}`} aria-live="polite">
         {valeur || '0'}<span className="ml-1 text-[30px] font-semibold">{devise === 'CAD' ? '$' : '€'}</span>
       </div>
 
@@ -89,7 +105,7 @@ export function SaisieRapide({ surFermer }: { surFermer: () => void }) {
         </label>
         <label className={puce}>
           <span className="h-2.5 w-2.5 rounded-full" style={{ background: compte?.couleur }} />
-          <span className="max-w-[110px] truncate">{nomCourt}</span>
+          <span className="max-w-[110px] truncate">{mode === 'virement' ? `De : ${nomCourt}` : nomCourt}</span>
           <select value={compteId} onChange={(e) => { setCompteChoisi(e.target.value); setMoyenChoisi(null) }} className="absolute inset-0 opacity-0" aria-label="Compte">
             {comptesSaisie.map((c) => <option key={c.id} value={c.id}>{c.nom} ({c.devise})</option>)}
           </select>
@@ -118,6 +134,33 @@ export function SaisieRapide({ surFermer }: { surFermer: () => void }) {
               <span className="line-clamp-2 text-center text-[11px] font-medium leading-[1.15] text-encre">{c.nom}</span>
             </button>
           ))}
+        </div>
+      ) : mode === 'virement' ? (
+        <div className="flex flex-col gap-2 pt-1">
+          <label className="relative flex min-h-[48px] items-center justify-between rounded-[12px] bg-white px-4 text-[16px] shadow-carte">
+            <span className="text-encre-douce">Vers</span>
+            <span className="flex items-center gap-1.5 font-medium text-encre">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: destination?.couleur }} />{destination?.nom ?? 'Aucun autre compte'}
+            </span>
+            <select value={destinationId} onChange={(e) => setDestinationChoisie(e.target.value)} className="absolute inset-0 opacity-0" aria-label="Compte de destination">
+              {destinations.map((c) => <option key={c.id} value={c.id}>{c.nom} ({c.devise})</option>)}
+            </select>
+          </label>
+          {deviseDiff && (
+            <label className="flex min-h-[48px] items-center justify-between gap-3 rounded-[12px] bg-white px-4 text-[16px] shadow-carte">
+              <span className="text-encre-douce">Montant reçu</span>
+              <span className="flex items-center gap-1">
+                <input inputMode="decimal" value={recu} onChange={(e) => setRecu(e.target.value)} placeholder="0,00" aria-label="Montant reçu"
+                  className="w-28 bg-transparent text-right font-semibold text-encre outline-none placeholder:text-encre-pale" />
+                <span className="text-encre-douce">{destination?.devise === 'EUR' ? '€' : '$'}</span>
+              </span>
+            </label>
+          )}
+          <button type="button" onClick={() => void enregistrer()}
+            className="min-h-[52px] rounded-[14px] bg-bleu text-[17px] font-semibold text-white active:bg-bleu-fonce">
+            Enregistrer le virement
+          </button>
+          {deviseDiff && <p className="px-1 text-center text-[12px] text-encre-pale">Pas de conversion : indique le montant arrivé sur le compte, tel que la banque l’affiche.</p>}
         </div>
       ) : (
         <div className="flex flex-col gap-2 pt-1">
@@ -152,11 +195,11 @@ function Confirmation({ op, categories, devise, nomCompte, surFermer, surMaj }: 
       <div className="flex flex-col items-center pt-2 text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-full bg-vert-pale text-[28px] text-vert">✓</span>
         <p className="mt-2 text-[15px] text-encre-douce">Enregistré</p>
-        <p className={`text-[32px] font-bold ${op.type === 'revenu' ? 'text-vert' : 'text-encre'}`}>
-          {formaterMontant(op.type === 'revenu' ? op.montant : -op.montant, devise, { signe: true })}
+        <p className={`text-[32px] font-bold ${op.type === 'revenu' ? 'text-vert' : op.type === 'virement' ? 'text-bleu' : 'text-encre'}`}>
+          {op.type === 'virement' ? formaterMontant(op.montant, devise) : formaterMontant(op.type === 'revenu' ? op.montant : -op.montant, devise, { signe: true })}
         </p>
         <p className="text-[15px] text-encre-douce">
-          {cat ? `${cat.icone} ${cat.nom} · ` : op.note ? `${op.note} · ` : ''}{nomCompte} · {libelleJour(op.date).toLowerCase()}
+          {op.type === 'virement' ? `Virement depuis ${nomCompte}` : <>{cat ? `${cat.icone} ${cat.nom} · ` : op.note ? `${op.note} · ` : ''}{nomCompte}</>} · {libelleJour(op.date).toLowerCase()}
         </p>
       </div>
 

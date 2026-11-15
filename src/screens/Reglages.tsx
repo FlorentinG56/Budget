@@ -10,6 +10,7 @@ import { useNav } from '../nav/Navigation'
 import { ListeOperations } from './operations/ListeOperations'
 import { ListeCategories } from './reglages/Categories'
 import { ListeComptes } from './reglages/Comptes'
+import { ListeRecurrences } from './reglages/Recurrences'
 import { CHOIX_DELAI_VERROUILLAGE } from '../security/verrouillage'
 
 function Groupe({ children }: { children: ReactNode }) {
@@ -49,8 +50,8 @@ export function Reglages() {
         <Ligne libelle="Comptes" surClic={() => nav.ouvrir(<ListeComptes />)} />
         <Ligne libelle="Catégories" surClic={() => nav.ouvrir(<ListeCategories />)} />
         <Ligne libelle="Toutes les opérations" surClic={() => nav.ouvrir(<ListeOperations />)} />
-        <Ligne libelle="Charges fixes et crédits" etape={3} />
-        <Ligne libelle="Revenus récurrents" etape={3} />
+        <Ligne libelle="Charges fixes et crédits" surClic={() => nav.ouvrir(<ListeRecurrences genre="charges" />)} />
+        <Ligne libelle="Revenus récurrents" surClic={() => nav.ouvrir(<ListeRecurrences genre="revenus" />)} />
         <Ligne libelle="Période du budget" etape={5} />
       </Groupe>
 
