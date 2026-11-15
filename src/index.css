@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root { height: 100%; }
+  html {
+    background: #F2F4F7;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-fond font-sans text-encre antialiased;
+    overscroll-behavior-y: none;
+    font-variant-numeric: tabular-nums;
+  }
+  button { -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+  input, select, textarea { font-size: 16px; } /* évite le zoom automatique d'iOS */
+}
+
+@layer utilities {
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  /* hauteur de la barre d'onglets + bouton « + » + zone de la barre du bas */
+  .pb-tabbar { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .animate-secousse { animation: secousse .4s ease-in-out; }
+}
+
+@keyframes secousse {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-10px); }
+  40%, 80% { transform: translateX(10px); }
+}
+
+html.masque #root { visibility: hidden; }
