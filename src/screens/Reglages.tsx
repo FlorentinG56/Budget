@@ -6,6 +6,10 @@ import { Ecran, TitreSection } from '../components/ui'
 import { ChoixCode, messageEchec } from '../lock/EcransVerrou'
 import { PavePin } from '../lock/PavePin'
 import { useVerrou } from '../lock/Verrou'
+import { useNav } from '../nav/Navigation'
+import { ListeOperations } from './operations/ListeOperations'
+import { ListeCategories } from './reglages/Categories'
+import { ListeComptes } from './reglages/Comptes'
 import { CHOIX_DELAI_VERROUILLAGE } from '../security/verrouillage'
 
 function Groupe({ children }: { children: ReactNode }) {
@@ -30,6 +34,7 @@ type Modal = null | 'delai' | 'code'
 
 export function Reglages() {
   const { delaiMinutes, changerDelai, verrouiller } = useVerrou()
+  const nav = useNav()
   const [modal, setModal] = useState<Modal>(null)
   const [persistant, setPersistant] = useState<boolean | null>(null)
 
@@ -41,8 +46,9 @@ export function Reglages() {
     <Ecran titre="Réglages">
       <TitreSection>Données</TitreSection>
       <Groupe>
-        <Ligne libelle="Comptes" etape={2} />
-        <Ligne libelle="Catégories" etape={2} />
+        <Ligne libelle="Comptes" surClic={() => nav.ouvrir(<ListeComptes />)} />
+        <Ligne libelle="Catégories" surClic={() => nav.ouvrir(<ListeCategories />)} />
+        <Ligne libelle="Toutes les opérations" surClic={() => nav.ouvrir(<ListeOperations />)} />
         <Ligne libelle="Charges fixes et crédits" etape={3} />
         <Ligne libelle="Revenus récurrents" etape={3} />
         <Ligne libelle="Période du budget" etape={5} />

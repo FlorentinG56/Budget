@@ -35,7 +35,7 @@ export type TypeOperation =
 export interface Operation {
   id: string
   date: DateISO
-  montant: Centimes // toujours positif ; le sens vient du type
+  montant: Centimes // positif ; le sens vient du type (exception : « ajustement », signé)
   type: TypeOperation
   compteId: string
   compteDestinationId?: string // virement, remboursement carte
@@ -120,6 +120,9 @@ export interface Reglages {
   verrouillageMinutes: number
   echecsPin: number
   bloqueJusqua?: number
+  donneesInitialisees: boolean // comptes et catégories de départ créés
+  soldesDepartSaisis: boolean // l'utilisateur a renseigné ses soldes de départ
+  dernierMoyenPaiement: 'debit' | 'carte'
 }
 
 export const REGLAGES_PAR_DEFAUT: Reglages = {
@@ -130,4 +133,7 @@ export const REGLAGES_PAR_DEFAUT: Reglages = {
   faceIdActive: false,
   verrouillageMinutes: 2,
   echecsPin: 0,
+  donneesInitialisees: false,
+  soldesDepartSaisis: false,
+  dernierMoyenPaiement: 'debit',
 }

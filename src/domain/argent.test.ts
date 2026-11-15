@@ -10,6 +10,12 @@ describe('formaterMontant', () => {
     expect(n(formaterMontant(123456, 'EUR'))).toBe('1 234,56 €')
     expect(n(formaterMontant(5, 'EUR'))).toBe('0,05 €')
     expect(n(formaterMontant(0, 'CAD'))).toBe('0,00 $')
+    expect(n(formaterMontant(148750, 'CAD'))).toBe('1 487,50 $')
+    expect(n(formaterMontant(123456789, 'EUR'))).toBe('1 234 567,89 €')
+    expect(n(formaterMontant(99999, 'EUR'))).toBe('999,99 €')
+  })
+  it('utilise une espace fine insécable pour les milliers et insécable avant le symbole', () => {
+    expect(formaterMontant(148750, 'CAD')).toBe('1\u202f487,50\u00a0$')
   })
   it('gère les négatifs et le signe +', () => {
     expect(n(formaterMontant(-1200, 'CAD'))).toBe('−12,00 $')
