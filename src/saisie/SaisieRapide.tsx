@@ -1,12 +1,13 @@
 import { subDays } from 'date-fns'
 import { useMemo, useState } from 'react'
-import { enregistrerOperation, supprimerOperation } from '../db/actions'
+import { confirmerEcheance, enregistrerOperation, supprimerOperation } from '../db/actions'
 import { modifierReglages } from '../db/db'
 import { analyserMontant, formaterMontant } from '../domain/argent'
 import { sousCategories, trierParUsage } from '../domain/categories'
-import { aujourdhui, libelleJour, versISO } from '../domain/dates'
+import { aujourdhui, libelleCourt, libelleJour, versISO } from '../domain/dates'
+import { echeanceARattacher } from '../domain/recurrences'
 import type { Categorie, Operation } from '../domain/types'
-import { indexer, useCategories, useComptes, useOperations, useReglages } from '../hooks/donnees'
+import { indexer, useCategories, useComptes, useOperations, useRecurrences, useReglages } from '../hooks/donnees'
 import { PaveNumerique } from './PaveNumerique'
 
 type Mode = 'depense' | 'revenu' | 'virement'
@@ -17,6 +18,8 @@ export function SaisieRapide({ surFermer }: { surFermer: () => void }) {
   const categories = useCategories()
   const operations = useOperations()
   const reglages = useReglages()
+  const recurrences = useRecurrences()
+  const [rattacher, setRattacher] = useState(true)
 
   const [mode, setMode] = useState<Mode>('depense')
   const [valeur, setValeur] = useState('')
@@ -56,6 +59,8 @@ export function SaisieRapide({ surFermer }: { surFermer: () => void }) {
   const refuser = () => { setSecoue(true); navigator.vibrate?.(60); setTimeout(() => setSecoue(false), 420) }
 
   const montantRecu = deviseDiff ? analyserMontant(recu) : montant
+  // Paie « à confirmer » proche de cette date sur ce compte : on propose de la rattacher (pas de double compte)
+  const echeance = mode === 'revenu' && compteId ? echeanceARattacher(recurrences ?? [], compteId, date) : undefined
 
   const enregistrer = async (categorie?: Categorie) => {
     if (!montant || !compteId) return refuser()
@@ -65,6 +70,11 @@ export function SaisieRapide({ surFermer }: { surFermer: () => void }) {
         date, montant, type: 'virement', compteId, compteDestinationId: destinationId,
         montantRecu: deviseDiff ? montantRecu : undefined, note: libelleRevenu.trim() || undefined,
       }))
+      return
+    }
+    if (mode === 'revenu' && echeance && rattacher) {
+      const op = await confirmerEcheance(echeance.recurrence.id, echeance.date, montant, date)
+      if (op) setEnregistree(op)
       return
     }
     const op = await enregistrerOperation({
@@ -164,8 +174,17 @@ export function SaisieRapide({ surFermer }: { surFermer: () => void }) {
         </div>
       ) : (
         <div className="flex flex-col gap-2 pt-1">
-          <input value={libelleRevenu} onChange={(e) => setLibelleRevenu(e.target.value)} placeholder="Libellé (ex. Facture client, Remboursement)"
-            className="min-h-[48px] rounded-[12px] bg-white px-4 text-[16px] shadow-carte outline-none placeholder:text-encre-pale" />
+          {echeance && (
+            <button type="button" role="switch" aria-checked={rattacher} onClick={() => setRattacher(!rattacher)}
+              className={`flex min-h-[48px] items-center gap-3 rounded-[12px] px-4 text-left text-[15px] shadow-carte ${rattacher ? 'bg-vert-pale text-encre' : 'bg-white text-encre-douce'}`}>
+              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-[13px] ${rattacher ? 'border-vert bg-vert text-white' : 'border-encre-pale'}`}>{rattacher ? '✓' : ''}</span>
+              <span>C’est la paie « {echeance.recurrence.libelle} » prévue le {libelleCourt(echeance.date)}</span>
+            </button>
+          )}
+          {!(echeance && rattacher) && (
+            <input value={libelleRevenu} onChange={(e) => setLibelleRevenu(e.target.value)} placeholder="Libellé (ex. Facture client, Remboursement)"
+              className="min-h-[48px] rounded-[12px] bg-white px-4 text-[16px] shadow-carte outline-none placeholder:text-encre-pale" />
+          )}
           <button type="button" onClick={() => void enregistrer()}
             className="min-h-[52px] rounded-[14px] bg-vert text-[17px] font-semibold text-white active:opacity-80">
             Enregistrer le revenu

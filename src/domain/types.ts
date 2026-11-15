@@ -71,6 +71,7 @@ export interface Recurrence {
   capitalInitial?: Centimes // pour la barre de progression
   tauxAnnuel?: number // en %, ex. 5.9
   actif: boolean
+  aConfirmer?: boolean // rien n'est généré automatiquement : l'app demande le montant réel le jour venu
   derniereEcheanceGeneree?: DateISO // les échéances jusqu'à cette date (incluse) sont déjà traitées
 }
 

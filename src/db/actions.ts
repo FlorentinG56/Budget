@@ -122,3 +122,27 @@ export async function genererEcheances(date: string = aujourdhui(), base: Budget
     return creees
   })
 }
+
+/**
+ * Confirme une échéance « à confirmer » : crée le revenu (ou la charge) avec le montant réel,
+ * et marque l'échéance comme traitée. montant = null : l'échéance est ignorée (pas reçue).
+ */
+export async function confirmerEcheance(recurrenceId: string, dateEcheance: string, montant: Centimes | null, dateOperation: string = dateEcheance, base: BudgetDB = db): Promise<Operation | null> {
+  return base.transaction('rw', base.recurrences, base.operations, async () => {
+    const rec = await base.recurrences.get(recurrenceId)
+    if (!rec) throw new Error('Récurrence introuvable')
+    let op: Operation | null = null
+    if (montant !== null) {
+      op = {
+        id: nouvelId(), date: dateOperation, montant, type: rec.type === 'revenu' ? 'revenu' : 'prelevement_fixe',
+        compteId: rec.type !== 'revenu' && rec.moyenPaiement === 'carte' && rec.carteId ? rec.carteId : rec.compteId,
+        categorieId: rec.categorieId, sousCategorieId: rec.sousCategorieId, note: rec.libelle, recurrenceId: rec.id, creeLe: Date.now(),
+      }
+      await base.operations.add(op)
+    }
+    if (!rec.derniereEcheanceGeneree || dateEcheance > rec.derniereEcheanceGeneree) {
+      await base.recurrences.update(rec.id, { derniereEcheanceGeneree: dateEcheance })
+    }
+    return op
+  })
+}

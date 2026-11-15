@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  appliquerMensualite, capitalRestant, dateDuMois, echeancesAGenerer, echeancesEntre, equivalentMensuel,
+  appliquerMensualite, capitalRestant, echeanceARattacher, echeancesEnAttente, dateDuMois, echeancesAGenerer, echeancesEntre, equivalentMensuel,
   genererOperations, libelleFrequence, mensualitesRestantes, progressionCredit,
 } from './recurrences'
 import type { Operation, Recurrence } from './types'
@@ -136,5 +136,26 @@ describe('affichage', () => {
     expect(libelleFrequence({ frequence: 'mensuel', jours: [1] })).toBe('Le 1er du mois')
     expect(libelleFrequence({ frequence: 'mensuel', jours: [31] })).toBe('Le dernier jour du mois')
     expect(libelleFrequence({ frequence: 'deux_dates_par_mois', jours: [15, 31] })).toBe('Le 15 et le dernier jour')
+  })
+})
+
+describe('montants à confirmer', () => {
+  const paie = rec({ id: 'paie', type: 'revenu', libelle: 'Salaire', montant: 180000, frequence: '14_jours', jours: [], dateDebut: '2026-11-11', aConfirmer: true, derniereEcheanceGeneree: '2026-11-15' })
+  it('rien n’est généré automatiquement', () => {
+    expect(genererOperations(paie, '2026-12-31', [], id, 1)).toEqual({ operations: [] })
+  })
+  it('liste les échéances arrivées non confirmées', () => {
+    expect(echeancesEnAttente([paie], '2026-11-24')).toEqual([])
+    expect(echeancesEnAttente([paie], '2026-11-25').map((e) => e.date)).toEqual(['2026-11-25'])
+    expect(echeancesEnAttente([paie], '2026-12-10').map((e) => e.date)).toEqual(['2026-11-25', '2026-12-09'])
+    expect(echeancesEnAttente([{ ...paie, derniereEcheanceGeneree: '2026-11-25' }], '2026-12-01')).toEqual([])
+    expect(echeancesEnAttente([{ ...paie, actif: false }], '2026-12-10')).toEqual([])
+  })
+  it('rattache une paie saisie à la main, même en avance', () => {
+    expect(echeanceARattacher([paie], 'chq', '2026-11-24')?.date).toBe('2026-11-25')
+    expect(echeanceARattacher([paie], 'chq', '2026-11-27')?.date).toBe('2026-11-25')
+    expect(echeanceARattacher([paie], 'activite', '2026-11-25')).toBeUndefined()
+    expect(echeanceARattacher([paie], 'chq', '2026-11-17')).toBeUndefined()
+    expect(echeanceARattacher([{ ...paie, derniereEcheanceGeneree: '2026-11-25' }], 'chq', '2026-11-26')).toBeUndefined()
   })
 })

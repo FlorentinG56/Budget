@@ -2,6 +2,7 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale/fr'
 import { BandeauEcheances } from '../components/BandeauEcheances'
 import { BandeauInstallation } from '../components/BandeauInstallation'
+import { BandeauPaies } from '../components/BandeauPaies'
 import { IconeChevron } from '../components/Icones'
 import { LigneOperation } from '../components/LigneOperation'
 import { AVenir, Carte, Ecran, TitreSection } from '../components/ui'
@@ -9,7 +10,7 @@ import { formaterMontant } from '../domain/argent'
 import { aujourdhui } from '../domain/dates'
 import { trierRecentes } from '../domain/operations'
 import { montantDuCarte, soldeCompte } from '../domain/soldes'
-import { indexer, useCategories, useComptes, useOperations, useReglages } from '../hooks/donnees'
+import { indexer, useCategories, useComptes, useOperations, useRecurrences, useReglages } from '../hooks/donnees'
 import { useNav } from '../nav/Navigation'
 import { EditionOperation } from './operations/EditionOperation'
 import { ListeOperations } from './operations/ListeOperations'
@@ -21,10 +22,11 @@ export function Accueil() {
   const categories = useCategories()
   const operations = useOperations()
   const reglages = useReglages()
+  const recurrences = useRecurrences()
   const date = aujourdhui()
   const titreDate = format(new Date(), 'EEEE d MMMM', { locale: fr })
 
-  if (!comptes || !categories || !operations || !reglages) return <Ecran titre="Accueil"><div /></Ecran>
+  if (!comptes || !categories || !operations || !reglages || !recurrences) return <Ecran titre="Accueil"><div /></Ecran>
 
   const principal = comptes?.find((c) => c.type === 'cheque' && c.inclusBudgetJournalier)
   const carte = comptes?.find((c) => c.type === 'carte_credit' && c.compteRemboursementId === principal?.id)
@@ -40,6 +42,7 @@ export function Accueil() {
   return (
     <Ecran titre="Accueil" action={<span className="inline-block pb-1.5 text-[15px] text-encre-douce first-letter:uppercase">{titreDate}</span>}>
       <BandeauInstallation />
+      <BandeauPaies recurrences={recurrences} comptes={mapComptes} />
       <BandeauEcheances comptes={mapComptes} surOuvrir={(op) => nav.ouvrir(<EditionOperation id={op.id} />)} />
 
       {reglages && !reglages.soldesDepartSaisis && (

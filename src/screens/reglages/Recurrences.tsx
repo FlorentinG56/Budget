@@ -73,6 +73,7 @@ export function ListeRecurrences({ genre }: { genre: Genre }) {
             <span className="block truncate text-[16px] font-medium text-encre">{r.libelle}</span>
             <span className="block truncate text-[13px] text-encre-pale">
               {libelleFrequence(r)} · {r.moyenPaiement === 'carte' && r.type !== 'revenu' ? 'carte' : compte?.nom.split(' – ')[0]}
+              {r.aConfirmer ? ' · à confirmer' : ''}
               {!r.actif ? ' · en pause' : prochaine ? ` · prochain : ${libelleCourt(prochaine)}` : ' · terminé'}
             </span>
           </span>
@@ -141,6 +142,7 @@ export function EditionRecurrence({ id, genre }: { id?: string; genre: Genre }) 
   const [categorieId, setCategorieId] = useState('')
   const [sousCategorieId, setSousCategorieId] = useState('')
   const [actif, setActif] = useState(true)
+  const [aConfirmer, setAConfirmer] = useState(genre === 'revenus')
   const [capital, setCapital] = useState('')
   const [emprunte, setEmprunte] = useState('')
   const [taux, setTaux] = useState('')
@@ -152,6 +154,7 @@ export function EditionRecurrence({ id, genre }: { id?: string; genre: Genre }) 
     setMoyen(existante.moyenPaiement); setFrequence(existante.frequence); setJour1(existante.jours[0] ?? 1); setJour2(existante.jours[1] ?? JOUR_FIN_DE_MOIS)
     setDateDebut(existante.dateDebut); setAvecFin(!!existante.dateFin); setDateFin(existante.dateFin ?? '')
     setCategorieId(existante.categorieId ?? ''); setSousCategorieId(existante.sousCategorieId ?? ''); setActif(existante.actif)
+    setAConfirmer(!!existante.aConfirmer)
     setTaux(existante.tauxAnnuel !== undefined ? String(existante.tauxAnnuel).replace('.', ',') : '')
     setEmprunte(existante.capitalInitial !== undefined ? versTexte(existante.capitalInitial) : '')
   }, [existante?.id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -188,6 +191,7 @@ export function EditionRecurrence({ id, genre }: { id?: string; genre: Genre }) 
     moyenPaiement: !estRevenu && moyen === 'carte' && carte ? 'carte' : 'compte', carteId: !estRevenu && moyen === 'carte' && carte ? carte.id : undefined,
     categorieId: estRevenu ? undefined : categorieId || undefined, sousCategorieId: estRevenu ? undefined : sousCategorieId || undefined,
     frequence, jours, dateDebut, dateFin: avecFin || finRequise ? dateFin || undefined : undefined, actif,
+    aConfirmer: estRevenu ? aConfirmer : undefined,
     capitalRestantDu: estCredit ? valeurCapital ?? undefined : undefined,
     capitalInitial: estCredit ? valeurEmprunte ?? existante?.capitalInitial : undefined,
     capitalReferenceDate: existante?.capitalReferenceDate,
@@ -223,7 +227,7 @@ export function EditionRecurrence({ id, genre }: { id?: string; genre: Genre }) 
 
       <Groupe>
         <Champ libelle="Libellé"><Saisie value={libelle} onChange={(e) => setLibelle(e.target.value)} placeholder={estRevenu ? 'Ex. Salaire' : estCredit ? 'Ex. Crédit auto' : 'Ex. Loyer'} /></Champ>
-        <Champ libelle={estCredit ? 'Mensualité' : 'Montant'} aide={montant && !valeur ? 'Montant invalide' : undefined}>
+        <Champ libelle={estCredit ? 'Mensualité' : estRevenu && aConfirmer ? 'Montant habituel' : 'Montant'} aide={montant && !valeur ? 'Montant invalide' : undefined}>
           <span className="flex items-center gap-1">
             <Saisie inputMode="decimal" value={montant} onChange={(e) => setMontant(e.target.value)} placeholder="0,00" />
             <span className="text-[17px] text-encre-douce">{compte?.devise === 'EUR' ? '€' : '$'}</span>
@@ -243,6 +247,22 @@ export function EditionRecurrence({ id, genre }: { id?: string; genre: Genre }) 
           </Champ>
         )}
       </Groupe>
+
+      {estRevenu && (
+        <>
+          <Groupe>
+            <div className="flex min-h-[50px] items-center justify-between gap-3 px-4 py-2">
+              <span className="text-[17px] text-encre">Montant à confirmer</span>
+              <Interrupteur actif={aConfirmer} surChange={setAConfirmer} libelle="Montant à confirmer" />
+            </div>
+          </Groupe>
+          <p className="-mt-1 px-1 text-[13px] leading-snug text-encre-pale">
+            {aConfirmer
+              ? 'Rien n’est crédité automatiquement : le jour venu, l’app te demande le montant reçu (prérempli avec le montant habituel).'
+              : 'Le montant est crédité automatiquement à chaque échéance.'}
+          </p>
+        </>
+      )}
 
       <TitreSection>Quand</TitreSection>
       <Groupe>

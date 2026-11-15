@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { capitalRestant } from '../domain/recurrences'
 import { aujourdhui } from '../domain/dates'
 import { soldeCompte } from '../domain/soldes'
-import { enregistrerRecurrence, genererEcheances, initialiserDonnees, supprimerOperation } from './actions'
+import { confirmerEcheance, enregistrerRecurrence, genererEcheances, initialiserDonnees, supprimerOperation } from './actions'
+import { echeancesEnAttente } from '../domain/recurrences'
 import { BudgetDB } from './db'
 
 const base0 = { compteId: 'chq', moyenPaiement: 'compte' as const, actif: true, jours: [1], frequence: 'mensuel' as const }
@@ -76,6 +77,23 @@ describe('prélèvements automatiques', () => {
     await base.recurrences.update(r.id, { derniereEcheanceGeneree: '2026-03-01', actif: false })
     await enregistrerRecurrence({ ...(await base.recurrences.get(r.id))!, actif: true }, base)
     expect((await base.recurrences.get(r.id))!.derniereEcheanceGeneree! >= '2026-11-01').toBe(true)
+    base.close()
+  })
+})
+
+describe('paie à confirmer', () => {
+  it('confirmer crée le revenu avec le montant réel ; ignorer ne crée rien', async () => {
+    const base = new BudgetDB('test-confirmer')
+    await initialiserDonnees(base)
+    const r = await enregistrerRecurrence({ ...base0, type: 'revenu', libelle: 'Salaire', montant: 180000, frequence: '14_jours', jours: [], dateDebut: '2026-11-11', aConfirmer: true }, base)
+    await base.recurrences.update(r.id, { derniereEcheanceGeneree: '2026-11-15' })
+    expect(await genererEcheances('2026-12-10', base)).toEqual([])
+    const op = await confirmerEcheance(r.id, '2026-11-25', 182345, '2026-11-25', base)
+    expect(op?.montant).toBe(182345)
+    expect(op?.recurrenceId).toBe(r.id)
+    expect(await confirmerEcheance(r.id, '2026-12-09', null, undefined, base)).toBeNull()
+    expect(echeancesEnAttente([(await base.recurrences.get(r.id))!], '2026-12-10')).toEqual([])
+    expect(await base.operations.count()).toBe(1)
     base.close()
   })
 })

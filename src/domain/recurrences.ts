@@ -132,6 +132,7 @@ export function progressionCredit(capitalInitial: Centimes | undefined, restant:
  */
 export function genererOperations(rec: Recurrence, aujourdhui: DateISO, operationsExistantes: Operation[], nouvelId: () => string, maintenant: number):
   { operations: Operation[]; traiteeJusquAu?: DateISO } {
+  if (rec.aConfirmer) return { operations: [] } // voir echeancesEnAttente
   const dates = echeancesAGenerer(rec, aujourdhui)
   if (dates.length === 0) return { operations: [] }
   let capital = rec.type === 'credit' ? capitalRestant(rec, operationsExistantes) : undefined
@@ -174,4 +175,38 @@ export function libelleFrequence(rec: Pick<Recurrence, 'frequence' | 'jours'>): 
     case 'mensuel': return rec.jours[0] >= JOUR_FIN_DE_MOIS ? 'Le dernier jour du mois' : `Le ${jour(rec.jours[0])} du mois`
     case 'deux_dates_par_mois': return `Le ${jour(rec.jours[0])} et le ${jour(rec.jours[1])}`
   }
+}
+
+// ---------- Montants à confirmer (ex. paie qui varie légèrement) ----------
+
+export interface EcheanceEnAttente {
+  recurrence: Recurrence
+  date: DateISO
+}
+
+/** Échéances « à confirmer » arrivées (jusqu'à aujourd'hui inclus) et pas encore confirmées ni ignorées. */
+export function echeancesEnAttente(recurrences: Recurrence[], aujourdhui: DateISO): EcheanceEnAttente[] {
+  return recurrences
+    .filter((r) => r.aConfirmer)
+    .flatMap((r) => echeancesAGenerer(r, aujourdhui).map((date) => ({ recurrence: r, date })))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+/**
+ * Pour une saisie manuelle de revenu : l'échéance « à confirmer » à laquelle la rattacher
+ * (même compte, pas encore confirmée, prévue entre 7 jours avant et 5 jours après la date de saisie).
+ * Évite de compter deux fois une paie arrivée en avance ou saisie à la main.
+ */
+export function echeanceARattacher(recurrences: Recurrence[], compteId: string, date: DateISO): EcheanceEnAttente | undefined {
+  const d = parseISO(date)
+  const du = versISO(addDays(d, -7))
+  const au = versISO(addDays(d, 5))
+  const candidates = recurrences
+    .filter((r) => r.aConfirmer && r.actif && r.type === 'revenu' && r.compteId === compteId)
+    .flatMap((r) => {
+      const depuis = r.derniereEcheanceGeneree && lendemain(r.derniereEcheanceGeneree) > du ? lendemain(r.derniereEcheanceGeneree) : du
+      return echeancesEntre(r, depuis, au).map((e) => ({ recurrence: r, date: e }))
+    })
+  // la plus proche de la date de saisie
+  return candidates.sort((a, b) => Math.abs(differenceInCalendarDays(parseISO(a.date), d)) - Math.abs(differenceInCalendarDays(parseISO(b.date), d)))[0]
 }
