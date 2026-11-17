@@ -190,3 +190,27 @@ describe('bilan détaillé', () => {
     expect(affectationAutomatique(0)).toBe('aucune')
   })
 })
+
+import { periodesAVenir } from './budget'
+
+describe('périodes à venir', () => {
+  it('revenus, charges, budget et non affecté des prochaines périodes', () => {
+    const p = { ...paie, derniereEcheanceGeneree: '2026-11-17' }
+    const loyer = rec({ id: 'loyer', libelle: 'Loyer', montant: 120000, jours: [1], derniereEcheanceGeneree: '2026-11-17' })
+    const netflix = rec({ id: 'nf', libelle: 'Netflix', montant: 2000, jours: [5], moyenPaiement: 'carte', carteId: 'cc', derniereEcheanceGeneree: '2026-11-17' })
+    const l = periodesAVenir(p, [p, loyer, netflix], [], budget, [], '2026-11-17', 4, 50000)
+    expect(l.map((x) => [x.bornes.debut, x.bornes.fin, x.previsions.revenus, x.previsions.charges, x.budget, x.nonAffecte])).toEqual([
+      ['2026-11-25', '2026-12-08', 180000, 122000, 50000, 8000],
+      ['2026-12-09', '2026-12-22', 180000, 0, 50000, 130000],
+      ['2026-12-23', '2027-01-05', 180000, 122000, 50000, 8000],
+      ['2027-01-06', '2027-01-19', 180000, 0, 50000, 130000],
+    ])
+  })
+  it('utilise le budget déjà validé d’une période future', () => {
+    const per = { id: 'x', dateDebut: '2026-11-25', dateFin: '2026-12-08', enveloppeValidee: 80000, epargneMiseDeCote: 0, reportPrecedent: 0, ajouts: [], cloturee: false }
+    expect(periodesAVenir(paie, [paie], [], budget, [per], '2026-11-17', 1, 50000)[0].budget).toBe(80000)
+  })
+  it('avant la première paie : commence à la première période', () => {
+    expect(periodesAVenir(paie, [paie], [], budget, [], '2026-11-01', 1, 50000)[0].bornes.debut).toBe('2026-11-11')
+  })
+})

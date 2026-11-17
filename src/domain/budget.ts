@@ -232,3 +232,34 @@ export function nonAffecte(prev: Pick<Previsions, 'revenus' | 'charges'>, envelo
 export function affectationAutomatique(ecart: Centimes): AffectationFin {
   return ecart > 0 ? 'epargne' : 'aucune'
 }
+
+// ---------- Périodes à venir ----------
+
+export interface PeriodeAVenir {
+  bornes: Bornes
+  previsions: Previsions
+  budget: Centimes
+  nonAffecte: Centimes
+}
+
+/**
+ * Les n périodes qui suivent la période en cours : revenus et charges prévus (montants habituels),
+ * budget (celui déjà validé s'il existe, sinon le budget par période) et non affecté.
+ */
+export function periodesAVenir(paie: Recurrence, recurrences: Recurrence[], operations: Operation[], budget: Set<string>,
+  periodes: Periode[], date: DateISO, n: number, budgetParPeriode: Centimes): PeriodeAVenir[] {
+  const liste: PeriodeAVenir[] = []
+  let courante = periodeCourante(paie, date)
+  let curseur = courante ? lendemain(courante.fin) : prochaineDatePaie(paie, date)
+  while (curseur && liste.length < n) {
+    const b = periodeCourante(paie, curseur)
+    if (!b) break
+    const previsions = previsionsPeriode(recurrences, operations, budget, b)
+    const validee = periodes.find((p) => p.dateDebut === b.debut)
+    const montant = validee ? enveloppeEffective(validee, operations) : budgetParPeriode
+    liste.push({ bornes: b, previsions, budget: montant, nonAffecte: previsions.revenus - previsions.charges - montant })
+    courante = b
+    curseur = lendemain(b.fin)
+  }
+  return liste
+}

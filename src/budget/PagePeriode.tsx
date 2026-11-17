@@ -4,7 +4,7 @@ import { modifierEnveloppe, retirerDeEnveloppe } from '../db/actions'
 import { Bouton, Groupe } from '../components/formulaire'
 import { TitreSection } from '../components/ui'
 import { formaterMontant } from '../domain/argent'
-import { budgetDuJourA, depensesBudget, previsionsPeriode } from '../domain/budget'
+import { budgetDuJourA, depensesBudget, periodesAVenir, previsionsPeriode, type PeriodeAVenir } from '../domain/budget'
 import { libelleCourt, libelleJour, versISO } from '../domain/dates'
 import type { Devise } from '../domain/types'
 import { useBudget } from '../hooks/budget'
@@ -83,6 +83,8 @@ export function PagePeriode() {
         </Groupe>
       )}
 
+      {ctx.paie && <PeriodesAVenir liste={periodesAVenir(ctx.paie, ctx.recurrences, ctx.operations, ctx.budget, ctx.periodes, ctx.date, 6, ctx.budgetParPeriode)} devise={devise} />}
+
       <TitreSection>Jour par jour</TitreSection>
       <Groupe>
         {[...jours].reverse().map((d) => {
@@ -107,5 +109,52 @@ export function PagePeriode() {
         <Bouton variante="secondaire" onClick={() => nav.ouvrir(<HistoriquePeriodes />)}>Historique</Bouton>
       </div>
     </Page>
+  )
+}
+
+/** Les prochaines périodes : revenus, charges, budget et non affecté (prévisions). */
+function PeriodesAVenir({ liste, devise }: { liste: PeriodeAVenir[]; devise: Devise }) {
+  const [ouverte, setOuverte] = useState<string | null>(null)
+  if (liste.length === 0) return null
+  return (
+    <>
+      <TitreSection>Périodes à venir</TitreSection>
+      <Groupe>
+        {liste.map((p) => {
+          const deplie = ouverte === p.bornes.debut
+          return (
+            <div key={p.bornes.debut}>
+              <button type="button" onClick={() => setOuverte(deplie ? null : p.bornes.debut)} aria-expanded={deplie}
+                className="block w-full px-4 py-3 text-left active:bg-fond">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="text-[16px] font-medium text-encre">{court(p.bornes.debut)} – {court(p.bornes.fin)} <span className="text-encre-pale">{deplie ? '▴' : '▾'}</span></span>
+                  <span className="text-right">
+                    <span className={`block text-[16px] font-bold ${p.nonAffecte < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(p.nonAffecte, devise)}</span>
+                    <span className="block text-[11px] text-encre-pale">non affecté</span>
+                  </span>
+                </span>
+                <span className="mt-1 flex flex-wrap gap-x-3 text-[13px] text-encre-douce">
+                  <span>Revenus <span className="text-vert">{formaterMontant(p.previsions.revenus, devise)}</span></span>
+                  <span>Charges {formaterMontant(p.previsions.charges, devise)}</span>
+                  <span>Budget {formaterMontant(p.budget, devise)}</span>
+                </span>
+              </button>
+              {deplie && (
+                <div className="space-y-0.5 border-t border-trait bg-fond/60 px-4 py-2 text-[13px]">
+                  {p.previsions.detailRevenus.map((d, i) => (
+                    <p key={'r' + i} className="flex justify-between"><span className="text-encre-douce">{d.libelle} · {court(d.date)}</span><span className="text-vert">{formaterMontant(d.montant, devise, { signe: true })}</span></p>
+                  ))}
+                  {p.previsions.detailCharges.map((d, i) => (
+                    <p key={'c' + i} className="flex justify-between"><span className="text-encre-douce">{d.libelle} · {court(d.date)}</span><span className="text-encre">{formaterMontant(-d.montant, devise)}</span></p>
+                  ))}
+                  {p.previsions.detailCharges.length === 0 && <p className="text-encre-pale">Aucune charge fixe sur cette période.</p>}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </Groupe>
+      <p className="px-1 text-[13px] leading-snug text-encre-pale">Prévisions avec les montants habituels. Non affecté = revenus − charges − budget : ce que tu pourras mettre de côté (en rouge si la paie ne suffit pas).</p>
+    </>
   )
 }
