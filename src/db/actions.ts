@@ -1,7 +1,7 @@
 import { aujourdhui } from '../domain/dates'
 import { montantAjustement, soldeCompte } from '../domain/soldes'
 import { genererOperations } from '../domain/recurrences'
-import type { AffectationFin, Categorie, Centimes, Compte, Operation, Periode, Recurrence } from '../domain/types'
+import type { AffectationFin, Categorie, Centimes, Compte, MouvementEpargne, ObjectifEpargne, Operation, Periode, Recurrence } from '../domain/types'
 import { db, lireReglages, modifierReglages, type BudgetDB } from './db'
 import { categoriesInitiales, comptesInitiaux } from './donneesInitiales'
 
@@ -167,6 +167,7 @@ export async function validerPeriode(p: { debut: string; fin: string; enveloppe:
     ...(p.demarrageLe && p.demarrageLe > p.debut ? { demarrageLe: p.demarrageLe } : {}),
   }
   await base.periodes.put(periode)
+  if (periode.epargneMiseDeCote > 0) await synchroniserSecurite(base)
   return periode
 }
 
@@ -177,6 +178,7 @@ export async function modifierEnveloppe(periodeId: string, enveloppe: Centimes, 
 /** Bilan de fin de période : le reste va en épargne ou est reporté ; un déficit peut être retiré de la suivante. */
 export async function cloturerPeriode(periodeId: string, affectation: AffectationFin, montant: Centimes, base: BudgetDB = db) {
   await base.periodes.update(periodeId, { cloturee: true, affectationFin: affectation, montantAffecte: montant })
+  if (affectation === 'epargne') await synchroniserSecurite(base)
 }
 
 /** Revenu ponctuel ou virement reçu en cours de période : « l'ajouter à l'enveloppe ? » */
@@ -192,5 +194,66 @@ export async function retirerDeEnveloppe(periodeId: string, operationId: string,
   await base.transaction('rw', base.periodes, async () => {
     const p = await base.periodes.get(periodeId)
     if (p) await base.periodes.update(periodeId, { ajouts: p.ajouts.filter((a) => a.operationId !== operationId) })
+  })
+}
+
+// ---------- Épargne virtuelle ----------
+
+export async function enregistrerObjectif(o: Omit<ObjectifEpargne, 'id' | 'mouvements' | 'archive'> & { id?: string; mouvements?: MouvementEpargne[]; archive?: boolean }, base: BudgetDB = db): Promise<ObjectifEpargne> {
+  const existant = o.id ? await base.objectifs.get(o.id) : undefined
+  const complet: ObjectifEpargne = { mouvements: existant?.mouvements ?? [], archive: existant?.archive ?? false, ...o, id: o.id ?? nouvelId() }
+  await base.objectifs.put(complet)
+  return complet
+}
+
+export async function ajouterMouvement(objectifId: string, m: Omit<MouvementEpargne, 'id'>, base: BudgetDB = db): Promise<void> {
+  await base.transaction('rw', base.objectifs, async () => {
+    const o = await base.objectifs.get(objectifId)
+    if (!o) throw new Error('Objectif introuvable')
+    await base.objectifs.update(objectifId, { mouvements: [...o.mouvements, { ...m, id: nouvelId() }] })
+  })
+}
+
+export async function supprimerMouvement(objectifId: string, mouvementId: string, base: BudgetDB = db): Promise<void> {
+  await base.transaction('rw', base.objectifs, async () => {
+    const o = await base.objectifs.get(objectifId)
+    if (o) await base.objectifs.update(objectifId, { mouvements: o.mouvements.filter((m) => m.id !== mouvementId) })
+  })
+}
+
+/**
+ * Objectif « Sécurité » : créé sur le compte du budget journalier, il reçoit l'épargne mise de côté à la paie
+ * et le reste de chaque période. Synchronise les mouvements automatiques (une fois par période, sans doublon).
+ */
+export async function synchroniserSecurite(base: BudgetDB = db): Promise<string | undefined> {
+  return base.transaction('rw', base.objectifs, base.reglages, base.comptes, base.periodes, async () => {
+    const r = await lireReglages(base)
+    let securite = r.objectifSecuriteId ? await base.objectifs.get(r.objectifSecuriteId) : undefined
+    if (!securite) {
+      const comptes = await base.comptes.orderBy('ordre').toArray()
+      const compte = comptes.find((c) => c.inclusBudgetJournalier && c.type !== 'carte_credit' && !c.archive) ?? comptes.find((c) => c.type !== 'carte_credit')
+      if (!compte) return undefined
+      securite = { id: nouvelId(), nom: 'Sécurité', compteId: compte.id, mouvements: [], archive: false }
+      await base.objectifs.add(securite)
+      await modifierReglages({ objectifSecuriteId: securite.id }, base)
+    }
+    const attendus = new Map<string, Omit<MouvementEpargne, 'id'>>()
+    for (const p of await base.periodes.toArray()) {
+      if (p.epargneMiseDeCote > 0) attendus.set(`paie:${p.id}`, { date: p.dateDebut, montant: p.epargneMiseDeCote, sens: 'mise_de_cote', source: `paie:${p.id}` })
+      if (p.cloturee && p.affectationFin === 'epargne' && (p.montantAffecte ?? 0) > 0) {
+        attendus.set(`bilan:${p.id}`, { date: p.dateFin, montant: p.montantAffecte!, sens: 'mise_de_cote', source: `bilan:${p.id}` })
+      }
+    }
+    let changement = false
+    const mouvements = securite.mouvements.map((m) => {
+      const a = m.source ? attendus.get(m.source) : undefined
+      if (!a) return m
+      attendus.delete(m.source!)
+      if (a.montant !== m.montant) { changement = true; return { ...m, montant: a.montant } }
+      return m
+    })
+    for (const a of attendus.values()) { mouvements.push({ ...a, id: nouvelId() }); changement = true }
+    if (changement) await base.objectifs.update(securite.id, { mouvements })
+    return securite.id
   })
 }

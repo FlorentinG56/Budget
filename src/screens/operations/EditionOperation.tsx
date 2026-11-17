@@ -6,7 +6,7 @@ import { Bouton, Champ, Choix, Groupe, Saisie } from '../../components/formulair
 import { analyserMontant, formaterMontant } from '../../domain/argent'
 import { categoriesPrincipales, sousCategories } from '../../domain/categories'
 import type { Operation } from '../../domain/types'
-import { useCategories, useComptes } from '../../hooks/donnees'
+import { useCategories, useComptes, useObjectifs } from '../../hooks/donnees'
 import { Page, useNav } from '../../nav/Navigation'
 
 const TITRES: Record<Operation['type'], string> = {
@@ -28,12 +28,14 @@ export function EditionOperation({ id }: { id: string }) {
   const [categorieId, setCategorieId] = useState('')
   const [sousCategorieId, setSousCategorieId] = useState('')
   const [note, setNote] = useState('')
+  const [objectifId, setObjectifId] = useState('')
+  const objectifs = useObjectifs()
   const [confirmerSuppression, setConfirmer] = useState(false)
 
   useEffect(() => {
     if (!op) return
     setMontant(versTexte(op.montant)); setDate(op.date); setCompteId(op.compteId)
-    setCategorieId(op.categorieId ?? ''); setSousCategorieId(op.sousCategorieId ?? ''); setNote(op.note ?? '')
+    setCategorieId(op.categorieId ?? ''); setSousCategorieId(op.sousCategorieId ?? ''); setNote(op.note ?? ''); setObjectifId(op.objectifEpargneId ?? '')
   }, [op?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (op === undefined || !comptes || !categories) return <Page titre="Opération"><div /></Page>
@@ -59,6 +61,7 @@ export function EditionOperation({ id }: { id: string }) {
       categorieId: avecCategorie ? categorieId || undefined : op.categorieId,
       sousCategorieId: avecCategorie ? sousCategorieId || undefined : op.sousCategorieId,
       note: note.trim() || undefined,
+      objectifEpargneId: op.type === 'depense' ? objectifId || undefined : op.objectifEpargneId,
     })
     retour()
   }
@@ -114,6 +117,23 @@ export function EditionOperation({ id }: { id: string }) {
           )}
         </Groupe>
       )}
+
+      {op.type === 'depense' && (() => {
+        const c = comptes.find((x) => x.id === compteId)
+        const compteEpargne = c?.type === 'carte_credit' ? c.compteRemboursementId : compteId
+        const possibles = (objectifs ?? []).filter((o) => o.compteId === compteEpargne && (!o.archive || o.id === objectifId))
+        if (possibles.length === 0) return null
+        return (
+          <Groupe>
+            <Champ libelle="Payé avec l’épargne" aide={objectifId ? 'Hors budget du jour' : undefined}>
+              <Choix value={objectifId} onChange={(e) => setObjectifId(e.target.value)}>
+                <option value="">Non</option>
+                {possibles.map((o) => <option key={o.id} value={o.id}>{o.nom}</option>)}
+              </Choix>
+            </Champ>
+          </Groupe>
+        )
+      })()}
 
       <Groupe>
         <Champ libelle={op.type === 'revenu' || op.type === 'prelevement_fixe' ? 'Libellé' : 'Note'}>

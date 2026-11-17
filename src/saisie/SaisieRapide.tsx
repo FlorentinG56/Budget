@@ -8,7 +8,8 @@ import { sousCategories, trierParUsage } from '../domain/categories'
 import { aujourdhui, libelleCourt, libelleJour, versISO } from '../domain/dates'
 import { echeanceARattacher } from '../domain/recurrences'
 import type { Categorie, Operation } from '../domain/types'
-import { indexer, useCategories, useComptes, useOperations, useRecurrences, useReglages } from '../hooks/donnees'
+import { indexer, useCategories, useComptes, useObjectifs, useOperations, useRecurrences, useReglages } from '../hooks/donnees'
+import { soldeObjectif } from '../domain/epargne'
 import { PaveNumerique } from './PaveNumerique'
 
 type Mode = 'depense' | 'revenu' | 'virement'
@@ -202,6 +203,11 @@ function Confirmation({ op, categories, devise, nomCompte, surFermer, surMaj }: 
   const [note, setNote] = useState(op.type === 'depense' ? op.note ?? '' : '')
   const { ctx, etat } = useBudget()
   const [ajoute, setAjoute] = useState(false)
+  const objectifs = useObjectifs()
+  // « Payé avec l'épargne » : objectifs du compte (ou du compte qui rembourse la carte)
+  const compteOp = ctx?.comptes.find((c) => c.id === op.compteId)
+  const compteEpargne = compteOp?.type === 'carte_credit' ? compteOp.compteRemboursementId : op.compteId
+  const objectifsPossibles = op.type === 'depense' ? (objectifs ?? []).filter((o) => !o.archive && o.compteId === compteEpargne) : []
   // revenu ponctuel (pas une paie prévue) ou virement reçu sur un compte du budget, pendant la période en cours
   const montantPourBudget = op.type === 'revenu' && !op.recurrenceId && ctx?.budget.has(op.compteId) ? op.montant
     : op.type === 'virement' && op.compteDestinationId && ctx?.budget.has(op.compteDestinationId) && !ctx.budget.has(op.compteId) ? op.montantRecu ?? op.montant
@@ -260,6 +266,24 @@ function Confirmation({ op, categories, devise, nomCompte, surFermer, surMaj }: 
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {objectifsPossibles.length > 0 && (
+        <div>
+          <p className="mb-1.5 px-1 text-[13px] font-semibold uppercase tracking-wide text-encre-pale">Imprévu ? Payé avec l’épargne</p>
+          <div className="flex flex-wrap gap-2">
+            {objectifsPossibles.map((o) => {
+              const actif = op.objectifEpargneId === o.id
+              return (
+                <button key={o.id} type="button" onClick={() => void maj({ objectifEpargneId: actif ? undefined : o.id })} aria-pressed={actif}
+                  className={`min-h-[40px] rounded-full px-3.5 text-[15px] font-medium shadow-carte ${actif ? 'bg-vert text-white' : 'bg-white text-encre'}`}>
+                  {actif ? '✓ ' : '🐷 '}{o.nom} <span className={actif ? 'text-white/80' : 'text-encre-pale'}>({formaterMontant(soldeObjectif(o, ctx?.operations ?? []), devise)})</span>
+                </button>
+              )
+            })}
+          </div>
+          {op.objectifEpargneId && <p className="mt-1 px-1 text-[12px] text-encre-pale">Retirée de l’épargne, elle ne compte pas dans ton budget du jour.</p>}
         </div>
       )}
 

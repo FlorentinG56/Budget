@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { BarreOnglets, type Onglet } from './components/BarreOnglets'
 import { Feuille } from './components/Feuille'
 import { EcheancesCtx } from './components/BandeauEcheances'
-import { genererEcheances, initialiserDonnees } from './db/actions'
+import { genererEcheances, initialiserDonnees, synchroniserSecurite } from './db/actions'
 import type { Operation } from './domain/types'
 import { NavCtx, type Nav } from './nav/Navigation'
 import { SaisieRapide } from './saisie/SaisieRapide'
@@ -49,7 +49,7 @@ export default function App() {
   useEffect(() => {
     if (etat !== 'deverrouille') return
     const traiter = async () => {
-      if (!pret) await initialiserDonnees()
+      if (!pret) { await initialiserDonnees(); await synchroniserSecurite() }
       const creees = await genererEcheances()
       if (creees.length) setRecentes((r) => [...r, ...creees])
       setPret(true)

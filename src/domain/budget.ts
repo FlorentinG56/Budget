@@ -101,7 +101,7 @@ export function enveloppeProposee(prev: Pick<Previsions, 'revenus' | 'charges'>,
 export function depensesBudget(operations: Operation[], budget: Set<string>, du: DateISO, au: DateISO): Centimes {
   let total = 0
   for (const op of operations) {
-    if (op.type === 'depense' && budget.has(op.compteId) && op.date >= du && op.date <= au) total += op.montant
+    if (op.type === 'depense' && !op.objectifEpargneId && budget.has(op.compteId) && op.date >= du && op.date <= au) total += op.montant
   }
   return total
 }
@@ -187,7 +187,7 @@ export function depensesParCategorie(operations: Operation[], budget: Set<string
   const somme = (d: DateISO, a: DateISO) => {
     const m = new Map<string | null, { montant: number; nombre: number }>()
     for (const op of operations) {
-      if (op.type !== 'depense' || !budget.has(op.compteId) || op.date < d || op.date > a) continue
+      if (op.type !== 'depense' || op.objectifEpargneId || !budget.has(op.compteId) || op.date < d || op.date > a) continue
       const k = op.categorieId ?? null
       const x = m.get(k) ?? { montant: 0, nombre: 0 }
       m.set(k, { montant: x.montant + op.montant, nombre: x.nombre + 1 })

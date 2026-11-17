@@ -29,3 +29,7 @@ export function indexer<T extends { id: string }>(liste: T[] | undefined): Map<s
 export function useRecurrences(): Recurrence[] | undefined {
   return useLiveQuery(() => db.recurrences.toArray(), [])
 }
+
+export function useObjectifs(): import('../domain/types').ObjectifEpargne[] | undefined {
+  return useLiveQuery(() => db.objectifs.toArray(), [])
+}

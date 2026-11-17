@@ -216,7 +216,7 @@ function Bilan({ etat, devise }: { etat: Extract<EtatBudget, { etat: 'bilan' }>;
         <Bouton variante="secondaire" onClick={() => nav.ouvrir(<PageBilan periodeId={periode.id} />)}>Bilan complet</Bouton>
         <Bouton onClick={() => void cloturerPeriode(periode.id, affectationAutomatique(bilan.ecart), bilan.ecart)}>Continuer</Bouton>
       </div>
-      {positif && <p className="mt-2 text-[12px] leading-snug text-encre-pale">Le reste sera rangé dans ton objectif « Sécurité » à l’étape 7 (épargne virtuelle). Le bilan reste consultable dans l’historique.</p>}
+      {positif && <p className="mt-2 text-[12px] leading-snug text-encre-pale">En touchant « Continuer », le reste est rangé dans ton objectif « Sécurité ». Le bilan reste consultable dans l’historique.</p>}
     </section>
   )
 }

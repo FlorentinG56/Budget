@@ -13,7 +13,8 @@ import { formaterMontant } from '../domain/argent'
 import { aujourdhui } from '../domain/dates'
 import { trierRecentes } from '../domain/operations'
 import { montantDuCarte, soldeCompte } from '../domain/soldes'
-import { indexer, useCategories, useComptes, useOperations, useRecurrences, useReglages } from '../hooks/donnees'
+import { indexer, useCategories, useComptes, useObjectifs, useOperations, useRecurrences, useReglages } from '../hooks/donnees'
+import { epargneReservee } from '../domain/epargne'
 import { useNav } from '../nav/Navigation'
 import { EditionOperation } from './operations/EditionOperation'
 import { ListeOperations } from './operations/ListeOperations'
@@ -27,10 +28,11 @@ export function Accueil() {
   const operations = useOperations()
   const reglages = useReglages()
   const recurrences = useRecurrences()
+  const objectifs = useObjectifs()
   const date = aujourdhui()
   const titreDate = format(new Date(), 'EEEE d MMMM', { locale: fr })
 
-  if (!comptes || !categories || !operations || !reglages || !recurrences) return <Ecran titre="Accueil"><div /></Ecran>
+  if (!comptes || !categories || !operations || !reglages || !recurrences || !objectifs) return <Ecran titre="Accueil"><div /></Ecran>
 
   const principal = comptes?.find((c) => c.type === 'cheque' && c.inclusBudgetJournalier)
   const carte = comptes?.find((c) => c.type === 'carte_credit' && c.compteRemboursementId === principal?.id)
@@ -42,6 +44,7 @@ export function Accueil() {
 
   const solde = principal ? soldeCompte(principal, ops, date) : 0
   const du = carte ? montantDuCarte(carte, ops, date) : 0
+  const reserve = principal ? epargneReservee(objectifs, ops, principal.id) : 0
 
   return (
     <Ecran titre="Accueil" action={<span className="inline-block pb-1.5 text-[15px] text-encre-douce first-letter:uppercase">{titreDate}</span>}>
@@ -71,6 +74,13 @@ export function Accueil() {
             </p>
             <p className={`mt-0.5 text-[34px] font-bold leading-tight tracking-tight ${solde < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(solde, principal.devise)}</p>
           </button>
+          {reserve !== 0 && (
+            <div className="mt-2 space-y-0.5 text-[14px]">
+              <p className="flex justify-between"><span className="text-encre-douce">dont épargne réservée</span><span className="text-encre-douce">{formaterMontant(-reserve, principal.devise)}</span></p>
+              <p className="flex justify-between"><span className="text-encre-douce">Disponible réel</span>
+                <span className={`font-semibold ${solde - reserve < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(solde - reserve, principal.devise)}</span></p>
+            </div>
+          )}
           {carte && du !== 0 && (
             <div className="mt-3 space-y-1.5 border-t border-trait pt-3 text-[15px]">
               <p className="flex justify-between"><span className="text-encre-douce">Montant dû sur la carte</span><span className="font-semibold text-encre">{formaterMontant(du, carte.devise)}</span></p>

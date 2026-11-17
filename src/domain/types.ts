@@ -46,6 +46,7 @@ export interface Operation {
   recurrenceId?: string
   partCapital?: Centimes // mensualité de crédit : part qui rembourse le capital
   echeance?: DateISO // opération issue d'une récurrence : date d'échéance prévue (peut différer de la date réelle)
+  objectifEpargneId?: string // dépense payée avec l'épargne : retirée de l'objectif, hors budget du jour
   creeLe: number // horodatage de saisie
 }
 
@@ -108,9 +109,12 @@ export interface Periode {
 }
 
 export interface MouvementEpargne {
+  id: string
   date: DateISO
-  montant: Centimes
+  montant: Centimes // positif ; le sens dit s'il s'ajoute ou se retire
   sens: 'mise_de_cote' | 'reprise'
+  note?: string
+  source?: string // mouvement automatique : 'paie:<période>' ou 'bilan:<période>' (évite les doublons)
 }
 
 export interface ObjectifEpargne {
@@ -141,6 +145,7 @@ export interface Reglages {
   dernierMoyenPaiement: 'debit' | 'carte'
   recurrencePaieId?: string // revenu récurrent qui ouvre chaque période du budget
   budgetParPeriode: Centimes // enveloppe fixe proposée à chaque paie (choisi par l’utilisateur)
+  objectifSecuriteId?: string // objectif qui reçoit l'épargne de la paie et le reste des périodes
 }
 
 export const REGLAGES_PAR_DEFAUT: Reglages = {
