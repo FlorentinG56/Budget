@@ -4,7 +4,7 @@ import type { Operation, Periode, Recurrence } from '../domain/types'
 
 const paie: Recurrence = { id: 'paie', type: 'revenu', libelle: 'Salaire', montant: 180000, compteId: 'chq', moyenPaiement: 'compte',
   frequence: '14_jours', jours: [], dateDebut: '2026-11-11', actif: true, aConfirmer: true, derniereEcheanceGeneree: '2026-11-17' }
-const ctx = (p: Partial<ContexteBudget>): ContexteBudget => ({ comptes: [], operations: [], recurrences: [paie], periodes: [], budget: new Set(['chq', 'cc']), paie, date: '2026-11-17', ...p })
+const ctx = (p: Partial<ContexteBudget>): ContexteBudget => ({ comptes: [], operations: [], recurrences: [paie], periodes: [], budget: new Set(['chq', 'cc']), paie, date: '2026-11-17', budgetParPeriode: 50000, ...p })
 const per = (p: Partial<Periode>): Periode => ({ id: 'p', dateDebut: '2026-11-11', dateFin: '2026-11-24', enveloppeValidee: 60000, epargneMiseDeCote: 0, reportPrecedent: 0, ajouts: [], cloturee: false, ...p })
 const dep = (date: string, montant: number): Operation => ({ id: date + montant, date, montant, type: 'depense', compteId: 'chq', creeLe: 0 })
 
@@ -21,12 +21,12 @@ describe('etatBudget', () => {
     expect(e.etat).toBe('actif')
     if (e.etat === 'actif') expect(e.jour.budgetJour).toBe(Math.round(54000 / 8))
   })
-  it('nouvelle paie : bilan de la période précédente, puis nouvelle enveloppe avec report', () => {
+  it('nouvelle paie : bilan de la période précédente, puis budget fixe proposé (pas de report)', () => {
     const e1 = etatBudget(ctx({ date: '2026-11-25', periodes: [per({})], operations: [dep('2026-11-12', 45000)] }))
     expect(e1.etat).toBe('bilan')
     if (e1.etat === 'bilan') expect(e1.bilan.ecart).toBe(15000)
-    const e2 = etatBudget(ctx({ date: '2026-11-25', periodes: [per({ cloturee: true, affectationFin: 'report', montantAffecte: 15000 })] }))
+    const e2 = etatBudget(ctx({ date: '2026-11-25', periodes: [per({ cloturee: true, affectationFin: 'epargne', montantAffecte: 15000 })] }))
     expect(e2.etat).toBe('a_valider')
-    if (e2.etat === 'a_valider') { expect(e2.report).toBe(15000); expect(e2.premiere).toBe(false) }
+    if (e2.etat === 'a_valider') { expect(e2.proposition).toBe(50000); expect(e2.premiere).toBe(false) }
   })
 })

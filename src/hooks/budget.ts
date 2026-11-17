@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import {
   bilanPeriode, calculerBudgetJour, comptesBudget, depensesBudget, enveloppeEffective, periodeCourante,
-  previsionsPeriode, prochaineDatePaie, recurrencePaie, reportPourSuivante, type Bilan, type Bornes, type BudgetJour, type Previsions,
+  previsionsPeriode, prochaineDatePaie, recurrencePaie, type Bilan, type Bornes, type BudgetJour, type Previsions,
 } from '../domain/budget'
 import { aujourdhui } from '../domain/dates'
 import type { Compte, Operation, Periode, Recurrence } from '../domain/types'
@@ -13,7 +13,7 @@ export type EtatBudget =
   | { etat: 'sans_paie' }
   | { etat: 'avant'; prochaine?: string }
   | { etat: 'bilan'; periode: Periode; bilan: Bilan; bornes: Bornes }
-  | { etat: 'a_valider'; bornes: Bornes; previsions: Previsions; report: number; premiere: boolean; depenseJusquIci: number }
+  | { etat: 'a_valider'; bornes: Bornes; previsions: Previsions; proposition: number; premiere: boolean; depenseJusquIci: number }
   | { etat: 'actif'; periode: Periode; bornes: Bornes; enveloppe: number; jour: BudgetJour }
 
 export interface ContexteBudget {
@@ -24,6 +24,7 @@ export interface ContexteBudget {
   budget: Set<string>
   paie?: Recurrence
   date: string
+  budgetParPeriode: number // enveloppe fixe proposée à chaque paie
 }
 
 /** Calcule l'état du budget journalier à partir des données (logique dans domain/budget.ts). */
@@ -38,11 +39,10 @@ export function etatBudget(c: ContexteBudget): EtatBudget {
 
   const enCours = c.periodes.find((p) => p.dateDebut === bornes.debut)
   if (!enCours) {
-    const precedente = c.periodes.filter((p) => p.cloturee && p.dateFin < bornes.debut).sort((a, b) => b.dateFin.localeCompare(a.dateFin))[0]
     return {
       etat: 'a_valider', bornes,
       previsions: previsionsPeriode(c.recurrences, c.operations, c.budget, bornes),
-      report: precedente ? reportPourSuivante(precedente) : 0,
+      proposition: c.budgetParPeriode,
       premiere: c.periodes.length === 0,
       depenseJusquIci: depensesBudget(c.operations, c.budget, bornes.debut, c.date),
     }
@@ -59,7 +59,10 @@ export function useContexteBudget(): ContexteBudget | undefined {
   const periodes = useLiveQuery(() => db.periodes.toArray(), [])
   if (!comptes || !operations || !recurrences || !reglages || !periodes) return undefined
   const budget = comptesBudget(comptes)
-  return { comptes, operations, recurrences, periodes, budget, paie: recurrencePaie(recurrences, budget, reglages.recurrencePaieId), date: aujourdhui() }
+  return {
+    comptes, operations, recurrences, periodes, budget, paie: recurrencePaie(recurrences, budget, reglages.recurrencePaieId), date: aujourdhui(),
+    budgetParPeriode: reglages.budgetParPeriode,
+  }
 }
 
 export function useBudget(): { ctx?: ContexteBudget; etat: EtatBudget } {

@@ -4,19 +4,20 @@ import { modifierEnveloppe, retirerDeEnveloppe } from '../db/actions'
 import { Bouton, Groupe } from '../components/formulaire'
 import { TitreSection } from '../components/ui'
 import { formaterMontant } from '../domain/argent'
-import { bilanPeriode, budgetDuJourA, depensesBudget } from '../domain/budget'
+import { budgetDuJourA, depensesBudget } from '../domain/budget'
 import { libelleCourt, libelleJour, versISO } from '../domain/dates'
 import type { Devise } from '../domain/types'
 import { useBudget } from '../hooks/budget'
-import { Page } from '../nav/Navigation'
+import { Page, useNav } from '../nav/Navigation'
+import { HistoriquePeriodes, PageBilan } from './PageBilan'
 import { ChampMontant, lireMontant, versTexteMontant } from './ChampMontant'
 import { Projection } from './CarteBudget'
 
 const court = (d: string) => libelleCourt(d).replace(/ \d{4}$/, '')
-const AFFECTATION = { epargne: 'mis en épargne', report: 'reporté', deficit_reporte: 'retiré de la suivante', aucune: '' }
 
 export function PagePeriode() {
   const { ctx, etat } = useBudget()
+  const nav = useNav()
   const [edition, setEdition] = useState<string | null>(null)
   if (!ctx || etat.etat !== 'actif') return <Page titre="Période"><p className="text-encre-douce">Aucune période en cours.</p></Page>
   const { periode, bornes, enveloppe, jour } = etat
@@ -27,15 +28,13 @@ export function PagePeriode() {
   const jours: string[] = []
   // 1re période démarrée en cours de route : pas de budget « rétroactif » avant le démarrage
   for (let d = periode.demarrageLe ?? bornes.debut; d <= ctx.date; d = versISO(addDays(parseISO(d), 1))) jours.push(d)
-  const passees = ctx.periodes.filter((p) => p.cloturee).sort((a, b) => b.dateDebut.localeCompare(a.dateDebut)).slice(0, 6)
   const nouvelle = edition !== null ? lireMontant(edition, true) : null
 
   return (
     <Page titre={`Du ${court(bornes.debut)} au ${court(bornes.fin)}`}>
       <Groupe>
         <div className="space-y-1.5 p-4 text-[15px]">
-          <p className="flex justify-between"><span className="text-encre-douce">Enveloppe validée</span><span className="font-semibold">{formaterMontant(periode.enveloppeValidee ?? 0, devise)}</span></p>
-          {periode.epargneMiseDeCote > 0 && <p className="flex justify-between pl-3 text-[13px] text-encre-pale"><span>dont épargne mise de côté</span><span>{formaterMontant(-periode.epargneMiseDeCote, devise)}</span></p>}
+          <p className="flex justify-between"><span className="text-encre-douce">Budget validé</span><span className="font-semibold">{formaterMontant(periode.enveloppeValidee ?? 0, devise)}</span></p>
           {periode.reportPrecedent !== 0 && <p className="flex justify-between pl-3 text-[13px] text-encre-pale"><span>dont période précédente</span><span>{formaterMontant(periode.reportPrecedent, devise, { signe: true })}</span></p>}
           {periode.ajouts.filter((a) => ops.has(a.operationId)).map((a) => (
             <p key={a.operationId} className="flex items-center justify-between">
@@ -53,7 +52,7 @@ export function PagePeriode() {
       </Groupe>
 
       {edition === null ? (
-        <Bouton variante="secondaire" onClick={() => setEdition(versTexteMontant(periode.enveloppeValidee ?? 0))}>Modifier l’enveloppe</Bouton>
+        <Bouton variante="secondaire" onClick={() => setEdition(versTexteMontant(periode.enveloppeValidee ?? 0))}>Modifier le budget de cette période</Bouton>
       ) : (
         <div className="flex gap-2">
           <div className="flex-1"><ChampMontant valeur={edition} surChange={setEdition} devise={devise} libelle="Enveloppe validée" /></div>
@@ -80,24 +79,10 @@ export function PagePeriode() {
       </Groupe>
       <p className="px-1 text-[13px] text-encre-pale">Dépensé ce jour-là / budget du jour. Vert : budget respecté.</p>
 
-      {passees.length > 0 && (<>
-        <TitreSection>Périodes précédentes</TitreSection>
-        <Groupe>
-          {passees.map((p) => {
-            const b = bilanPeriode(p, ctx.operations, ctx.budget)
-            return (
-              <div key={p.id} className="flex min-h-[50px] items-center justify-between px-4 py-2 text-[15px]">
-                <span><span className="block text-encre">{court(p.dateDebut)} – {court(p.dateFin)}</span>
-                  <span className="block text-[13px] text-encre-pale">{formaterMontant(b.depense, devise)} sur {formaterMontant(b.enveloppe, devise)}</span></span>
-                <span className="text-right">
-                  <span className={`block font-semibold ${b.ecart >= 0 ? 'text-vert' : 'text-rouge'}`}>{formaterMontant(b.ecart, devise, { signe: true })}</span>
-                  <span className="block text-[12px] text-encre-pale">{p.affectationFin ? AFFECTATION[p.affectationFin] : ''}</span>
-                </span>
-              </div>
-            )
-          })}
-        </Groupe>
-      </>)}
+      <div className="flex gap-2">
+        <Bouton variante="secondaire" onClick={() => nav.ouvrir(<PageBilan periodeId={periode.id} />)}>Par catégorie</Bouton>
+        <Bouton variante="secondaire" onClick={() => nav.ouvrir(<HistoriquePeriodes />)}>Historique</Bouton>
+      </div>
     </Page>
   )
 }

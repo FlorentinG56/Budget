@@ -5,7 +5,7 @@ import { LigneOperation } from '../components/LigneOperation'
 import { IconeChevron } from '../components/Icones'
 import { Ecran } from '../components/ui'
 import { formaterMontant } from '../domain/argent'
-import { budgetDuJourA, depensesBudget, enveloppeEffective } from '../domain/budget'
+import { budgetDuJourA, depensesBudget, enveloppeEffective, joursDansPeriode, periodeCourante } from '../domain/budget'
 import { libelleJour } from '../domain/dates'
 import { echeancesEnAttente, lendemain } from '../domain/recurrences'
 import {
@@ -55,7 +55,9 @@ export function Calendrier() {
       const { jour, bornes, enveloppe } = etat
       if (d === aujourdhui) return Math.max(0, jour.resteAujourdhui)
       if (d <= bornes.fin) return Math.max(0, jour.budgetJoursSuivants ?? 0)
-      return Math.max(0, Math.round(enveloppe / jour.joursTotal)) // périodes futures : budget moyen de la période actuelle
+      // périodes futures : le budget par période (choisi par l’utilisateur) supposé entièrement dépensé, réparti sur ses jours
+      const future = ctx.paie ? periodeCourante(ctx.paie, d) : undefined
+      return future ? Math.round(ctx.budgetParPeriode / joursDansPeriode(future)) : Math.round(enveloppe / jour.joursTotal)
     }
     return projeterSoldes({
       comptes: vue.comptes, aujourdhui, jusquAu: fin,

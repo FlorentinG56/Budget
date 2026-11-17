@@ -155,3 +155,38 @@ describe('bilan et report', () => {
     expect(reportPourSuivante({ affectationFin: 'aucune' })).toBe(0)
   })
 })
+
+import { affectationAutomatique, depensesParCategorie, joursRespectes, nonAffecte } from './budget'
+
+describe('bilan détaillé', () => {
+  const per: Periode = { id: 'p', dateDebut: '2026-11-25', dateFin: '2026-12-08', enveloppeValidee: 50000, epargneMiseDeCote: 0, reportPrecedent: 0, ajouts: [], cloturee: false }
+  it('dépenses par catégorie, triées, avec part et comparaison', () => {
+    const ops = [
+      op({ date: '2026-11-26', montant: 20000, categorieId: 'alim' }), op({ date: '2026-11-27', compteId: 'cc', montant: 10000, categorieId: 'alim' }),
+      op({ date: '2026-11-28', montant: 10000, categorieId: 'transport' }), op({ date: '2026-11-29', montant: 10000 }),
+      op({ date: '2026-11-30', compteId: 'ca', montant: 99999, categorieId: 'alim' }), // autre compte : ignoré
+      op({ date: '2026-11-15', montant: 25000, categorieId: 'alim' }), op({ date: '2026-11-16', montant: 5000, categorieId: 'loisirs' }),
+    ]
+    const l = depensesParCategorie(ops, budget, '2026-11-25', '2026-12-08', { debut: '2026-11-11', fin: '2026-11-24' })
+    expect(l.map((x) => [x.categorieId, x.montant, x.nombre, x.part, x.precedent])).toEqual([
+      ['alim', 30000, 2, 0.6, 25000],
+      ['transport', 10000, 1, 0.2, 0],
+      [null, 10000, 1, 0.2, 0],
+      ['loisirs', 0, 0, 0, 5000], // dépensée la période d'avant, plus celle-ci
+    ])
+  })
+  it('jours où le budget du jour a été respecté', () => {
+    // 500 $ / 14 j = 35,71 $ ; le 1er jour 50 $ (dépassé), puis rien
+    const r = joursRespectes(per, [op({ date: '2026-11-25', montant: 5000 })], budget)
+    expect(r).toEqual({ respectes: 13, total: 14 })
+    expect(joursRespectes(per, [], budget, '2026-11-27')).toEqual({ respectes: 3, total: 3 })
+  })
+  it('non affecté = paie − charges − budget', () => {
+    expect(nonAffecte({ revenus: 182345, charges: 122000 }, 50000)).toBe(10345)
+  })
+  it('sans report : reste → épargne, dépassement → noté', () => {
+    expect(affectationAutomatique(1500)).toBe('epargne')
+    expect(affectationAutomatique(-1500)).toBe('aucune')
+    expect(affectationAutomatique(0)).toBe('aucune')
+  })
+})

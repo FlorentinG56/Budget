@@ -98,8 +98,8 @@ export interface Periode {
   dateDebut: DateISO
   dateFin: DateISO
   enveloppeValidee?: Centimes // inclut le report précédent, épargne déjà retirée
-  epargneMiseDeCote: Centimes
-  reportPrecedent: Centimes // + reste reporté, − déficit retiré
+  epargneMiseDeCote: Centimes // mis de côté à la paie (ne réduit pas l'enveloppe)
+  reportPrecedent: Centimes // ancien fonctionnement (report) : 0 désormais
   ajouts: AjoutEnveloppe[]
   demarrageLe?: DateISO // 1re période commencée en cours de route : jour du démarrage du budget
   cloturee: boolean
@@ -140,6 +140,7 @@ export interface Reglages {
   soldesDepartSaisis: boolean // l'utilisateur a renseigné ses soldes de départ
   dernierMoyenPaiement: 'debit' | 'carte'
   recurrencePaieId?: string // revenu récurrent qui ouvre chaque période du budget
+  budgetParPeriode: Centimes // enveloppe fixe proposée à chaque paie (choisi par l’utilisateur)
 }
 
 export const REGLAGES_PAR_DEFAUT: Reglages = {
@@ -153,4 +154,5 @@ export const REGLAGES_PAR_DEFAUT: Reglages = {
   donneesInitialisees: false,
   soldesDepartSaisis: false,
   dernierMoyenPaiement: 'debit',
+  budgetParPeriode: 50000,
 }

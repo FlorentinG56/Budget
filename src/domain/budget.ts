@@ -1,6 +1,6 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns'
 import { echeancesEntre, lendemain, veille } from './recurrences'
-import type { Centimes, Compte, DateISO, Operation, Periode, Recurrence } from './types'
+import type { AffectationFin, Centimes, Compte, DateISO, Operation, Periode, Recurrence } from './types'
 import { addDays } from 'date-fns'
 import { versISO } from './dates'
 
@@ -171,4 +171,64 @@ export function reportPourSuivante(p: Pick<Periode, 'affectationFin' | 'montantA
 /** Budget journalier d'un jour passé (pour le calendrier) : même formule, en se plaçant ce jour-là. */
 export function budgetDuJourA(enveloppe: Centimes, operations: Operation[], budget: Set<string>, b: Bornes, date: DateISO): Centimes {
   return calculerBudgetJour(enveloppe, operations, budget, b, date).budgetJour
+}
+
+// ---------- Bilan détaillé ----------
+
+export interface LigneCategorie {
+  categorieId: string | null // null : sans catégorie
+  montant: Centimes
+  part: number // 0..1
+  nombre: number
+  precedent?: Centimes // même catégorie, période précédente
+}
+
+/** Dépenses du budget par catégorie principale, de la plus grosse à la plus petite. */
+export function depensesParCategorie(operations: Operation[], budget: Set<string>, du: DateISO, au: DateISO, precedente?: Bornes): LigneCategorie[] {
+  const somme = (d: DateISO, a: DateISO) => {
+    const m = new Map<string | null, { montant: number; nombre: number }>()
+    for (const op of operations) {
+      if (op.type !== 'depense' || !budget.has(op.compteId) || op.date < d || op.date > a) continue
+      const k = op.categorieId ?? null
+      const x = m.get(k) ?? { montant: 0, nombre: 0 }
+      m.set(k, { montant: x.montant + op.montant, nombre: x.nombre + 1 })
+    }
+    return m
+  }
+  const actuelles = somme(du, au)
+  const avant = precedente ? somme(precedente.debut, precedente.fin) : undefined
+  const total = [...actuelles.values()].reduce((s, x) => s + x.montant, 0)
+  const cles = new Set([...actuelles.keys(), ...(avant ? avant.keys() : [])])
+  return [...cles]
+    .map((k) => ({
+      categorieId: k,
+      montant: actuelles.get(k)?.montant ?? 0,
+      nombre: actuelles.get(k)?.nombre ?? 0,
+      part: total ? (actuelles.get(k)?.montant ?? 0) / total : 0,
+      precedent: avant ? avant.get(k)?.montant ?? 0 : undefined,
+    }))
+    .sort((a, b) => b.montant - a.montant || (b.precedent ?? 0) - (a.precedent ?? 0))
+}
+
+/** Nombre de jours où la dépense est restée sous le budget du jour (à partir du démarrage). */
+export function joursRespectes(periode: Periode, operations: Operation[], budget: Set<string>, jusquAu: DateISO = periode.dateFin): { respectes: number; total: number } {
+  const b = { debut: periode.dateDebut, fin: periode.dateFin }
+  const enveloppe = enveloppeEffective(periode, operations)
+  const fin = jusquAu < periode.dateFin ? jusquAu : periode.dateFin
+  let respectes = 0, total = 0
+  for (let d = periode.demarrageLe ?? periode.dateDebut; d <= fin; d = lendemain(d)) {
+    total++
+    if (depensesBudget(operations, budget, d, d) <= calculerBudgetJour(enveloppe, operations, budget, b, d).budgetJour) respectes++
+  }
+  return { respectes, total }
+}
+
+/** Ce qui reste de la paie une fois les charges de la période et le budget retirés (proposé à l'épargne). */
+export function nonAffecte(prev: Pick<Previsions, 'revenus' | 'charges'>, enveloppe: Centimes): Centimes {
+  return prev.revenus - prev.charges - enveloppe
+}
+
+/** Fin de période, sans report : un reste part en épargne, un dépassement est seulement noté. */
+export function affectationAutomatique(ecart: Centimes): AffectationFin {
+  return ecart > 0 ? 'epargne' : 'aucune'
 }
