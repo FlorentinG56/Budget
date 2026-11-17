@@ -149,6 +149,7 @@ export function genererOperations(rec: Recurrence, aujourdhui: DateISO, operatio
       sousCategorieId: rec.sousCategorieId,
       note: rec.libelle,
       recurrenceId: rec.id,
+      echeance: date,
       creeLe: maintenant,
     }
     if (capital !== undefined) {

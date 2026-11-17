@@ -1,6 +1,7 @@
 import { subDays } from 'date-fns'
 import { useMemo, useState } from 'react'
-import { confirmerEcheance, enregistrerOperation, supprimerOperation } from '../db/actions'
+import { ajouterAEnveloppe, confirmerEcheance, enregistrerOperation, supprimerOperation } from '../db/actions'
+import { useBudget } from '../hooks/budget'
 import { modifierReglages } from '../db/db'
 import { analyserMontant, formaterMontant } from '../domain/argent'
 import { sousCategories, trierParUsage } from '../domain/categories'
@@ -199,6 +200,13 @@ function Confirmation({ op, categories, devise, nomCompte, surFermer, surMaj }: 
   op: Operation; categories: Categorie[]; devise: 'CAD' | 'EUR'; nomCompte: string; surFermer: () => void; surMaj: (o: Operation) => void
 }) {
   const [note, setNote] = useState(op.type === 'depense' ? op.note ?? '' : '')
+  const { ctx, etat } = useBudget()
+  const [ajoute, setAjoute] = useState(false)
+  // revenu ponctuel (pas une paie prévue) ou virement reçu sur un compte du budget, pendant la période en cours
+  const montantPourBudget = op.type === 'revenu' && !op.recurrenceId && ctx?.budget.has(op.compteId) ? op.montant
+    : op.type === 'virement' && op.compteDestinationId && ctx?.budget.has(op.compteDestinationId) && !ctx.budget.has(op.compteId) ? op.montantRecu ?? op.montant
+    : 0
+  const proposerAjout = montantPourBudget > 0 && etat.etat === 'actif' && op.date >= etat.bornes.debut && op.date <= etat.bornes.fin
   const cats = indexer(categories)
   const cat = op.categorieId ? cats.get(op.categorieId) : undefined
   const sous = cat ? sousCategories(categories, cat.id) : []
@@ -236,6 +244,22 @@ function Confirmation({ op, categories, devise, nomCompte, surFermer, surMaj }: 
               )
             })}
           </div>
+        </div>
+      )}
+
+      {proposerAjout && etat.etat === 'actif' && (
+        <div className="rounded-[12px] bg-white p-3 shadow-carte">
+          {ajoute ? (
+            <p className="text-center text-[15px] font-medium text-vert">✓ Ajouté à l’enveloppe de la période</p>
+          ) : (
+            <>
+              <p className="text-[15px] text-encre">L’ajouter à l’enveloppe du budget de la période ?</p>
+              <button type="button" onClick={async () => { await ajouterAEnveloppe(etat.periode.id, op.id, montantPourBudget); setAjoute(true) }}
+                className="mt-2 min-h-[44px] w-full rounded-[10px] bg-vert-pale text-[15px] font-semibold text-vert active:opacity-70">
+                Oui, ajouter {formaterMontant(montantPourBudget, 'CAD')}
+              </button>
+            </>
+          )}
         </div>
       )}
 

@@ -5,7 +5,10 @@ import { BandeauInstallation } from '../components/BandeauInstallation'
 import { BandeauPaies } from '../components/BandeauPaies'
 import { IconeChevron } from '../components/Icones'
 import { LigneOperation } from '../components/LigneOperation'
-import { AVenir, Carte, Ecran, TitreSection } from '../components/ui'
+import { Carte, Ecran, TitreSection } from '../components/ui'
+import { CarteBudget } from '../budget/CarteBudget'
+import { RembourserCarte } from '../budget/RembourserCarte'
+import { useState } from 'react'
 import { formaterMontant } from '../domain/argent'
 import { aujourdhui } from '../domain/dates'
 import { trierRecentes } from '../domain/operations'
@@ -18,6 +21,7 @@ import { EditionCompte, ListeComptes, texteSolde } from './reglages/Comptes'
 
 export function Accueil() {
   const nav = useNav()
+  const [remboursement, setRemboursement] = useState(false)
   const comptes = useComptes()
   const categories = useCategories()
   const operations = useOperations()
@@ -57,6 +61,8 @@ export function Accueil() {
         </button>
       )}
 
+      <CarteBudget devise={principal?.devise ?? 'CAD'} />
+
       {principal && (
         <Carte>
           <button type="button" onClick={() => nav.ouvrir(<EditionCompte id={principal.id} />)} className="block w-full text-left">
@@ -70,12 +76,18 @@ export function Accueil() {
               <p className="flex justify-between"><span className="text-encre-douce">Montant dû sur la carte</span><span className="font-semibold text-encre">{formaterMontant(du, carte.devise)}</span></p>
               <p className="flex justify-between"><span className="text-encre-douce">Solde après remboursement</span>
                 <span className={`font-semibold ${solde - du < 0 ? 'text-rouge' : 'text-bleu'}`}>{formaterMontant(solde - du, principal.devise)}</span></p>
+              {du > 0 && (
+                <button type="button" onClick={() => setRemboursement(true)}
+                  className="mt-1.5 min-h-[44px] w-full rounded-[12px] bg-bleu-pale text-[15px] font-semibold text-bleu active:opacity-70">
+                  💳 Rembourser la carte
+                </button>
+              )}
             </div>
           )}
+          {carte && <RembourserCarte ouverte={remboursement} surFermer={() => setRemboursement(false)} carte={carte} compte={principal} du={du} />}
         </Carte>
       )}
 
-      <AVenir titre="Budget du jour" etape={5}>Combien tu peux encore dépenser aujourd’hui, et la progression de la période.</AVenir>
 
       <div className="flex items-baseline justify-between">
         <TitreSection>Dernières dépenses</TitreSection>

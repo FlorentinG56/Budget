@@ -45,6 +45,7 @@ export interface Operation {
   note?: string
   recurrenceId?: string
   partCapital?: Centimes // mensualité de crédit : part qui rembourse le capital
+  echeance?: DateISO // opération issue d'une récurrence : date d'échéance prévue (peut différer de la date réelle)
   creeLe: number // horodatage de saisie
 }
 
@@ -85,14 +86,25 @@ export interface Categorie {
   archivee: boolean
 }
 
+export interface AjoutEnveloppe {
+  operationId: string // revenu ponctuel ou virement reçu en cours de période
+  montant: Centimes
+}
+
+export type AffectationFin = 'epargne' | 'report' | 'deficit_reporte' | 'aucune'
+
 export interface Periode {
   id: string
   dateDebut: DateISO
   dateFin: DateISO
-  enveloppeValidee?: Centimes
+  enveloppeValidee?: Centimes // inclut le report précédent, épargne déjà retirée
   epargneMiseDeCote: Centimes
-  reportPrecedent: Centimes
+  reportPrecedent: Centimes // + reste reporté, − déficit retiré
+  ajouts: AjoutEnveloppe[]
+  demarrageLe?: DateISO // 1re période commencée en cours de route : jour du démarrage du budget
   cloturee: boolean
+  affectationFin?: AffectationFin // choix fait au bilan
+  montantAffecte?: Centimes // reste (ou déficit) concerné par ce choix
 }
 
 export interface MouvementEpargne {
@@ -127,6 +139,7 @@ export interface Reglages {
   donneesInitialisees: boolean // comptes et catégories de départ créés
   soldesDepartSaisis: boolean // l'utilisateur a renseigné ses soldes de départ
   dernierMoyenPaiement: 'debit' | 'carte'
+  recurrencePaieId?: string // revenu récurrent qui ouvre chaque période du budget
 }
 
 export const REGLAGES_PAR_DEFAUT: Reglages = {

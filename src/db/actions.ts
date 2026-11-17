@@ -1,7 +1,7 @@
 import { aujourdhui } from '../domain/dates'
 import { montantAjustement, soldeCompte } from '../domain/soldes'
 import { genererOperations } from '../domain/recurrences'
-import type { Categorie, Centimes, Compte, Operation, Recurrence } from '../domain/types'
+import type { AffectationFin, Categorie, Centimes, Compte, Operation, Periode, Recurrence } from '../domain/types'
 import { db, lireReglages, modifierReglages, type BudgetDB } from './db'
 import { categoriesInitiales, comptesInitiaux } from './donneesInitiales'
 
@@ -136,7 +136,7 @@ export async function confirmerEcheance(recurrenceId: string, dateEcheance: stri
       op = {
         id: nouvelId(), date: dateOperation, montant, type: rec.type === 'revenu' ? 'revenu' : 'prelevement_fixe',
         compteId: rec.type !== 'revenu' && rec.moyenPaiement === 'carte' && rec.carteId ? rec.carteId : rec.compteId,
-        categorieId: rec.categorieId, sousCategorieId: rec.sousCategorieId, note: rec.libelle, recurrenceId: rec.id, creeLe: Date.now(),
+        categorieId: rec.categorieId, sousCategorieId: rec.sousCategorieId, note: rec.libelle, recurrenceId: rec.id, echeance: dateEcheance, creeLe: Date.now(),
       }
       await base.operations.add(op)
     }
@@ -144,5 +144,53 @@ export async function confirmerEcheance(recurrenceId: string, dateEcheance: stri
       await base.recurrences.update(rec.id, { derniereEcheanceGeneree: dateEcheance })
     }
     return op
+  })
+}
+
+// ---------- Carte de crédit ----------
+
+/** « Rembourser la carte » : retiré du compte de remboursement et du montant dû. Pas une dépense. */
+export async function rembourserCarte(carteId: string, montant: Centimes, date: string = aujourdhui(), base: BudgetDB = db): Promise<Operation> {
+  const carte = await base.comptes.get(carteId)
+  if (!carte?.compteRemboursementId) throw new Error('Carte sans compte de remboursement')
+  return enregistrerOperation({ date, montant, type: 'remboursement_carte', compteId: carte.compteRemboursementId, compteDestinationId: carteId }, base)
+}
+
+// ---------- Périodes du budget journalier ----------
+
+export const idPeriode = (dateDebut: string) => `p-${dateDebut}`
+
+export async function validerPeriode(p: { debut: string; fin: string; enveloppe: Centimes; epargne: Centimes; report: Centimes; demarrageLe?: string }, base: BudgetDB = db): Promise<Periode> {
+  const periode: Periode = {
+    id: idPeriode(p.debut), dateDebut: p.debut, dateFin: p.fin, enveloppeValidee: p.enveloppe,
+    epargneMiseDeCote: p.epargne, reportPrecedent: p.report, ajouts: [], cloturee: false,
+    ...(p.demarrageLe && p.demarrageLe > p.debut ? { demarrageLe: p.demarrageLe } : {}),
+  }
+  await base.periodes.put(periode)
+  return periode
+}
+
+export async function modifierEnveloppe(periodeId: string, enveloppe: Centimes, base: BudgetDB = db) {
+  await base.periodes.update(periodeId, { enveloppeValidee: enveloppe })
+}
+
+/** Bilan de fin de période : le reste va en épargne ou est reporté ; un déficit peut être retiré de la suivante. */
+export async function cloturerPeriode(periodeId: string, affectation: AffectationFin, montant: Centimes, base: BudgetDB = db) {
+  await base.periodes.update(periodeId, { cloturee: true, affectationFin: affectation, montantAffecte: montant })
+}
+
+/** Revenu ponctuel ou virement reçu en cours de période : « l'ajouter à l'enveloppe ? » */
+export async function ajouterAEnveloppe(periodeId: string, operationId: string, montant: Centimes, base: BudgetDB = db) {
+  await base.transaction('rw', base.periodes, async () => {
+    const p = await base.periodes.get(periodeId)
+    if (!p || p.ajouts.some((a) => a.operationId === operationId)) return
+    await base.periodes.update(periodeId, { ajouts: [...p.ajouts, { operationId, montant }] })
+  })
+}
+
+export async function retirerDeEnveloppe(periodeId: string, operationId: string, base: BudgetDB = db) {
+  await base.transaction('rw', base.periodes, async () => {
+    const p = await base.periodes.get(periodeId)
+    if (p) await base.periodes.update(periodeId, { ajouts: p.ajouts.filter((a) => a.operationId !== operationId) })
   })
 }

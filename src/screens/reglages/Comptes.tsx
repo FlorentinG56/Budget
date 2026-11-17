@@ -13,6 +13,7 @@ import type { Compte, Devise, TypeCompte } from '../../domain/types'
 import { useComptes, useOperations } from '../../hooks/donnees'
 import { Page, useNav } from '../../nav/Navigation'
 import { ListeOperations } from '../operations/ListeOperations'
+import { RembourserCarte } from '../../budget/RembourserCarte'
 
 const LIBELLE_TYPE: Record<TypeCompte, string> = { cheque: 'Compte courant', carte_credit: 'Carte de crédit', epargne: 'Épargne' }
 
@@ -77,6 +78,7 @@ export function EditionCompte({ id }: { id?: string }) {
   const [inclus, setInclus] = useState(false)
   const [remboursement, setRemboursement] = useState('')
   const [ajustement, setAjustement] = useState(false)
+  const [rembOuvert, setRembOuvert] = useState(false)
 
   useEffect(() => {
     if (!existant) return
@@ -118,6 +120,9 @@ export function EditionCompte({ id }: { id?: string }) {
             <Bouton variante="secondaire" className="!min-h-[44px] !text-[15px]" onClick={() => setAjustement(true)}>Ajuster le solde</Bouton>
             <Bouton variante="secondaire" className="!min-h-[44px] !text-[15px]" onClick={() => nav.ouvrir(<ListeOperations compteInitial={existant.id} />)}>Opérations</Bouton>
           </div>
+          {estCarte && existant.compteRemboursementId && (
+            <Bouton className="mt-2 !min-h-[44px] !text-[15px]" onClick={() => setRembOuvert(true)}>💳 Rembourser la carte</Bouton>
+          )}
         </div>
       )}
 
@@ -178,6 +183,10 @@ export function EditionCompte({ id }: { id?: string }) {
         <p className="px-1 text-[13px] text-encre-pale">Un compte archivé n’apparaît plus dans la saisie ; son historique est conservé.</p>
       )}
 
+      {existant && estCarte && soldeActuel !== null && (
+        <RembourserCarte ouverte={rembOuvert} surFermer={() => setRembOuvert(false)} carte={existant}
+          compte={comptes?.find((c) => c.id === existant.compteRemboursementId)} du={-soldeActuel} />
+      )}
       {existant && soldeActuel !== null && (
         <AjusterSolde ouverte={ajustement} surFermer={() => setAjustement(false)} compte={existant} soldeActuel={soldeActuel} />
       )}

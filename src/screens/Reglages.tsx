@@ -11,6 +11,7 @@ import { ListeOperations } from './operations/ListeOperations'
 import { ListeCategories } from './reglages/Categories'
 import { ListeComptes } from './reglages/Comptes'
 import { ListeRecurrences } from './reglages/Recurrences'
+import { PeriodeBudget } from './reglages/PeriodeBudget'
 import { CHOIX_DELAI_VERROUILLAGE } from '../security/verrouillage'
 import { rechercherMiseAJour, type ResultatMiseAJour } from '../miseAJour'
 
@@ -55,7 +56,7 @@ export function Reglages() {
         <Ligne libelle="Toutes les opérations" surClic={() => nav.ouvrir(<ListeOperations />)} />
         <Ligne libelle="Charges fixes et crédits" surClic={() => nav.ouvrir(<ListeRecurrences genre="charges" />)} />
         <Ligne libelle="Revenus récurrents" surClic={() => nav.ouvrir(<ListeRecurrences genre="revenus" />)} />
-        <Ligne libelle="Période du budget" etape={5} />
+        <Ligne libelle="Période du budget" surClic={() => nav.ouvrir(<PeriodeBudget />)} />
       </Groupe>
 
       <TitreSection>Sécurité</TitreSection>
