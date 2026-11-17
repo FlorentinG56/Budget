@@ -1,5 +1,6 @@
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale/fr'
+import { BandeauAlertes } from '../components/BandeauAlertes'
 import { BandeauEcheances } from '../components/BandeauEcheances'
 import { BandeauInstallation } from '../components/BandeauInstallation'
 import { BandeauPaies } from '../components/BandeauPaies'
@@ -49,6 +50,7 @@ export function Accueil() {
   return (
     <Ecran titre="Accueil" action={<span className="inline-block pb-1.5 text-[15px] text-encre-douce first-letter:uppercase">{titreDate}</span>}>
       <BandeauInstallation />
+      <BandeauAlertes />
       <BandeauPaies recurrences={recurrences} comptes={mapComptes} />
       <BandeauEcheances comptes={mapComptes} surOuvrir={(op) => nav.ouvrir(<EditionOperation id={op.id} />)} />
 

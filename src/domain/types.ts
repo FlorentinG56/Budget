@@ -149,6 +149,7 @@ export interface Reglages {
   recurrencePaieId?: string // revenu récurrent qui ouvre chaque période du budget
   budgetParPeriode: Centimes // enveloppe fixe proposée à chaque paie (choisi par l’utilisateur)
   objectifSecuriteId?: string // objectif qui reçoit l'épargne de la paie et le reste des périodes
+  rappelSauvegardeJours: number // « Dernière sauvegarde il y a X jours » au-delà de ce délai
 }
 
 export const REGLAGES_PAR_DEFAUT: Reglages = {
@@ -163,4 +164,5 @@ export const REGLAGES_PAR_DEFAUT: Reglages = {
   soldesDepartSaisis: false,
   dernierMoyenPaiement: 'debit',
   budgetParPeriode: 50000,
+  rappelSauvegardeJours: 14,
 }

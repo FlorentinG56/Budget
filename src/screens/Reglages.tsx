@@ -7,6 +7,8 @@ import { ChoixCode, messageEchec } from '../lock/EcransVerrou'
 import { PavePin } from '../lock/PavePin'
 import { useVerrou } from '../lock/Verrou'
 import { useNav } from '../nav/Navigation'
+import { useReglages } from '../hooks/donnees'
+import { modifierReglages } from '../db/db'
 import { ListeOperations } from './operations/ListeOperations'
 import { ListeCategories } from './reglages/Categories'
 import { ListeComptes } from './reglages/Comptes'
@@ -33,10 +35,11 @@ function Ligne({ libelle, valeur, surClic, etape, danger }: { libelle: string; v
   return surClic ? <button type="button" onClick={surClic} className={`${cls} active:bg-fond`}>{contenu}</button> : <div className={cls}>{contenu}</div>
 }
 
-type Modal = null | 'delai' | 'code'
+type Modal = null | 'delai' | 'code' | 'alerte' | 'rappel'
 
 export function Reglages() {
   const { delaiMinutes, changerDelai, verrouiller } = useVerrou()
+  const reglages = useReglages()
   const nav = useNav()
   const [modal, setModal] = useState<Modal>(null)
   const [persistant, setPersistant] = useState<boolean | null>(null)
@@ -58,6 +61,13 @@ export function Reglages() {
         <Ligne libelle="Revenus récurrents" surClic={() => nav.ouvrir(<ListeRecurrences genre="revenus" />)} />
         <Ligne libelle="Période du budget" surClic={() => nav.ouvrir(<PeriodeBudget />)} />
       </Groupe>
+
+      <TitreSection>Alertes</TitreSection>
+      <Groupe>
+        <Ligne libelle="Prévenir des charges" valeur={reglages ? (reglages.delaiAlerteJours === 0 ? 'Jamais' : `${reglages.delaiAlerteJours} jour${reglages.delaiAlerteJours > 1 ? 's' : ''} avant`) : '…'} surClic={() => setModal('alerte')} />
+        <Ligne libelle="Rappel de sauvegarde" valeur={reglages ? (reglages.rappelSauvegardeJours === 0 ? 'Jamais' : `Tous les ${reglages.rappelSauvegardeJours} jours`) : '…'} surClic={() => setModal('rappel')} />
+      </Groupe>
+      <p className="px-1 text-[13px] leading-snug text-encre-pale">Les bandeaux s’affichent en haut de l’accueil : charges à venir, budget du jour dépassé, solde projeté négatif, fin d’un crédit. Touche × pour en masquer un jusqu’au lendemain.</p>
 
       <TitreSection>Sécurité</TitreSection>
       <Groupe>
@@ -91,6 +101,25 @@ export function Reglages() {
           {CHOIX_DELAI_VERROUILLAGE.map((c) => (
             <Ligne key={c.minutes} libelle={c.libelle} valeur={c.minutes === delaiMinutes ? <span className="font-semibold text-bleu">✓</span> : null}
               surClic={() => { void changerDelai(c.minutes); setModal(null) }} />
+          ))}
+        </Groupe>
+      </Feuille>
+
+      <Feuille ouverte={modal === 'alerte'} surFermer={() => setModal(null)} titre="Prévenir des charges">
+        <p className="mb-3 text-[15px] text-encre-douce">Un bandeau annonce chaque charge fixe ou mensualité qui arrive (ex. « Dans 2 jours : Loyer – 1 200 $ »).</p>
+        <Groupe>
+          {[0, 1, 2, 3, 5, 7].map((j) => (
+            <Ligne key={j} libelle={j === 0 ? 'Jamais' : `${j} jour${j > 1 ? 's' : ''} avant`} valeur={reglages?.delaiAlerteJours === j ? <span className="font-semibold text-bleu">✓</span> : null}
+              surClic={() => { void modifierReglages({ delaiAlerteJours: j }); setModal(null) }} />
+          ))}
+        </Groupe>
+      </Feuille>
+      <Feuille ouverte={modal === 'rappel'} surFermer={() => setModal(null)} titre="Rappel de sauvegarde">
+        <p className="mb-3 text-[15px] text-encre-douce">Supprimer l’icône de l’app efface ses données : un bandeau te rappelle de faire une sauvegarde (disponible à l’étape 10).</p>
+        <Groupe>
+          {[0, 7, 14, 30].map((j) => (
+            <Ligne key={j} libelle={j === 0 ? 'Jamais' : `Tous les ${j} jours`} valeur={reglages?.rappelSauvegardeJours === j ? <span className="font-semibold text-bleu">✓</span> : null}
+              surClic={() => { void modifierReglages({ rappelSauvegardeJours: j }); setModal(null) }} />
           ))}
         </Groupe>
       </Feuille>

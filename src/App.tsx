@@ -41,6 +41,7 @@ export default function App() {
   const nav = useMemo<Nav>(() => ({
     ouvrir: (page) => { setPile((p) => [...p, page]); window.scrollTo(0, 0) },
     retour: () => setPile((p) => p.slice(0, -1)),
+    changerOnglet: (o) => { setPile([]); setOnglet(o) },
   }), [])
 
   // Prélèvements et revenus automatiques : à l'ouverture, puis à chaque retour au premier plan.

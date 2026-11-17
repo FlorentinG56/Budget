@@ -5,15 +5,13 @@ import { LigneOperation } from '../components/LigneOperation'
 import { IconeChevron } from '../components/Icones'
 import { Ecran } from '../components/ui'
 import { formaterMontant } from '../domain/argent'
-import { budgetDuJourA, depensesBudget, enveloppeEffective, joursDansPeriode, periodeCourante } from '../domain/budget'
+import { budgetDuJourA, depensesBudget, enveloppeEffective } from '../domain/budget'
 import { libelleJour } from '../domain/dates'
-import { echeancesEnAttente, lendemain } from '../domain/recurrences'
-import {
-  ajouterJours, evenementsPrevus, grilleMois, montantCompact, premierJourNegatif, projeterSoldes, type JourProjete,
-} from '../domain/projection'
+import { evenementsPrevus, grilleMois, montantCompact, premierJourNegatif, type JourProjete } from '../domain/projection'
 import { soldeCompte } from '../domain/soldes'
 import type { Compte, DateISO, Devise, Operation } from '../domain/types'
-import { etatBudget, useContexteBudget } from '../hooks/budget'
+import { useContexteBudget } from '../hooks/budget'
+import { calculerProjection } from '../hooks/projection'
 import { indexer, useCategories } from '../hooks/donnees'
 import { useNav } from '../nav/Navigation'
 import { EditionOperation } from './operations/EditionOperation'
@@ -45,31 +43,10 @@ export function Calendrier() {
   const aujourdhui = ctx?.date ?? ''
 
   // Projection sur 12 mois (une seule fois par changement de données ou de compte)
-  const projection = useMemo(() => {
-    if (!ctx || !vue) return new Map<DateISO, JourProjete>()
-    const etat = etatBudget(ctx)
-    const comptesVue = ctx.comptes.filter((c) => vue.comptes.has(c.id))
-    const fin = ajouterJours(aujourdhui, 372)
-    const depenseJour = (d: DateISO): number => {
-      if (!vue.budget || etat.etat !== 'actif') return 0
-      const { jour, bornes, enveloppe } = etat
-      const cote = Math.max(0, etat.resteACote ?? 0) // l'argent « à côté » est supposé dépensé d'ici la fin de la période
-      const parJourCote = d <= bornes.fin ? Math.round(cote / jour.joursRestants) : 0
-      if (d === aujourdhui) return Math.max(0, jour.resteAujourdhui) + parJourCote
-      if (d <= bornes.fin) return Math.max(0, jour.budgetJoursSuivants ?? 0) + parJourCote
-      // périodes futures : le budget par période (choisi par l’utilisateur) supposé entièrement dépensé, réparti sur ses jours
-      const future = ctx.paie ? periodeCourante(ctx.paie, d) : undefined
-      return future ? Math.round(ctx.budgetParPeriode / joursDansPeriode(future)) : Math.round(enveloppe / jour.joursTotal)
-    }
-    return projeterSoldes({
-      comptes: vue.comptes, aujourdhui, jusquAu: fin,
-      soldeFinAujourdhui: comptesVue.reduce((s, c) => s + soldeCompte(c, ctx.operations, aujourdhui), 0),
-      enAttenteAujourdhui: echeancesEnAttente(ctx.recurrences, aujourdhui).filter((e) => vue.comptes.has(e.recurrence.compteId)).reduce((s, e) => s + e.recurrence.montant, 0),
-      evenements: evenementsPrevus(ctx.recurrences, lendemain(aujourdhui), fin, ctx.operations),
-      operationsFutures: ctx.operations.filter((o) => o.date > aujourdhui),
-      depenseJour,
-    })
-  }, [ctx, vue, aujourdhui])
+  const projection = useMemo(
+    () => (ctx && vue ? calculerProjection(ctx, vue.comptes, vue.budget, 372) : new Map<DateISO, JourProjete>()),
+    [ctx, vue],
+  )
 
   if (!ctx || !vue || !categories) return <Ecran titre="Calendrier"><div /></Ecran>
 

@@ -5,6 +5,7 @@ import { IconeChevron } from '../components/Icones'
 export interface Nav {
   ouvrir: (page: ReactNode) => void
   retour: () => void
+  changerOnglet: (onglet: 'accueil' | 'calendrier' | 'analyses' | 'epargne' | 'reglages') => void
 }
 
 export const NavCtx = createContext<Nav | null>(null)
