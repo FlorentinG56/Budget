@@ -86,6 +86,17 @@ describe('budget du jour', () => {
     expect(proj([4500])).toBe(4500) // pile le budget du jour
     expect(proj([500, 8000])).toBe(4056) // 85 $ : 365 / 9
   })
+  it('la projection d’aujourd’hui est exactement le budget du jour de demain', () => {
+    const b = { debut: '2026-11-11', fin: '2026-11-24' } // 17 nov : 8 jours restants (17→24), 7 après aujourd'hui (18→24)
+    for (const depenseDuJour of [0, 1250, 6250, 7250, 50000]) {
+      const ops = [op({ date: '2026-11-12', montant: 3000 }), op({ date: '2026-11-17', montant: depenseDuJour })]
+      const aujourdhui = calculerBudgetJour(50000, ops, budget, b, '2026-11-17')
+      const demain = calculerBudgetJour(50000, ops, budget, b, '2026-11-18')
+      expect(aujourdhui.joursRestants).toBe(8)
+      expect(demain.joursRestants).toBe(7)
+      expect(aujourdhui.budgetJoursSuivants).toBe(demain.budgetJour)
+    }
+  })
   it('pas de projection le dernier jour', () => {
     expect(calculerBudgetJour(50000, [], budget, { debut: '2026-11-01', fin: '2026-11-10' }, '2026-11-10').budgetJoursSuivants).toBeUndefined()
   })
