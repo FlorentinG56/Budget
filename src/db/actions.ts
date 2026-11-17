@@ -261,3 +261,8 @@ export async function synchroniserSecurite(base: BudgetDB = db): Promise<string 
     return securite.id
   })
 }
+
+/** Montant « à côté du budget » de la période (modifiable à tout moment, 0 possible). */
+export async function modifierACote(periodeId: string, montant: Centimes, base: BudgetDB = db) {
+  await base.periodes.update(periodeId, { aCote: Math.max(0, montant) })
+}

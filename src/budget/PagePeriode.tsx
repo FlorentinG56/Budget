@@ -1,10 +1,10 @@
 import { addDays, parseISO } from 'date-fns'
 import { useState } from 'react'
-import { modifierEnveloppe, retirerDeEnveloppe } from '../db/actions'
+import { modifierACote, modifierEnveloppe, retirerDeEnveloppe } from '../db/actions'
 import { Bouton, Groupe } from '../components/formulaire'
 import { TitreSection } from '../components/ui'
 import { formaterMontant } from '../domain/argent'
-import { budgetDuJourA, depensesBudget, periodesAVenir, previsionsPeriode, type PeriodeAVenir } from '../domain/budget'
+import { budgetDuJourA, depensesBudget, depensesParFinancement, periodesAVenir, previsionsPeriode, type PeriodeAVenir } from '../domain/budget'
 import { libelleCourt, libelleJour, versISO } from '../domain/dates'
 import type { Devise } from '../domain/types'
 import { useBudget } from '../hooks/budget'
@@ -19,6 +19,7 @@ export function PagePeriode() {
   const { ctx, etat } = useBudget()
   const nav = useNav()
   const [edition, setEdition] = useState<string | null>(null)
+  const [editionCote, setEditionCote] = useState<string | null>(null)
   if (!ctx || etat.etat !== 'actif') return <Page titre="Période"><p className="text-encre-douce">Aucune période en cours.</p></Page>
   const { periode, bornes, enveloppe, jour } = etat
   const devise: Devise = ctx.comptes.find((c) => ctx.budget.has(c.id))?.devise ?? 'CAD'
@@ -28,6 +29,7 @@ export function PagePeriode() {
   const jours: string[] = []
   // 1re période démarrée en cours de route : pas de budget « rétroactif » avant le démarrage
   for (let d = periode.demarrageLe ?? bornes.debut; d <= ctx.date; d = versISO(addDays(parseISO(d), 1))) jours.push(d)
+  const depenseCote = depensesParFinancement(ctx.operations, ctx.budget, bornes.debut, bornes.fin).aCote
   const charges = previsionsPeriode(ctx.recurrences, ctx.operations, ctx.budget, bornes)
   const resteAPrelever = charges.detailCharges.filter((c) => c.estime).reduce((t, c) => t + c.montant, 0)
   const nouvelle = edition !== null ? lireMontant(edition, true) : null
@@ -61,6 +63,34 @@ export function PagePeriode() {
           <Bouton className="!w-auto" disabled={nouvelle === null} onClick={async () => { if (nouvelle !== null) { await modifierEnveloppe(periode.id, nouvelle); setEdition(null) } }}>OK</Bouton>
         </div>
       )}
+
+      <TitreSection>À côté du budget</TitreSection>
+      <Groupe>
+        <div className="space-y-1.5 p-4 text-[15px]">
+          <p className="flex items-center justify-between gap-3">
+            <span className="text-encre">🛍️ Montant à côté</span>
+            {editionCote === null ? (
+              <span className="flex items-center gap-3">
+                <span className="font-semibold">{formaterMontant(periode.aCote ?? 0, devise)}</span>
+                <button type="button" onClick={() => setEditionCote(versTexteMontant(periode.aCote ?? 0))} className="min-h-[36px] font-semibold text-bleu">Modifier</button>
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                <span className="w-32"><ChampMontant valeur={editionCote} surChange={setEditionCote} devise={devise} libelle="Montant à côté du budget" /></span>
+                <button type="button" disabled={lireMontant(editionCote) === null}
+                  onClick={async () => { const v = lireMontant(editionCote); if (v !== null) { await modifierACote(periode.id, v); setEditionCote(null) } }}
+                  className="min-h-[44px] px-2 font-semibold text-bleu disabled:opacity-40">OK</button>
+              </span>
+            )}
+          </p>
+          <p className="flex justify-between"><span className="text-encre-douce">Dépensé à côté</span><span className="font-semibold">{formaterMontant(depenseCote, devise)}</span></p>
+          <p className="flex justify-between border-t border-trait pt-1.5"><span className="font-semibold">Reste à côté</span>
+            <span className={`font-bold ${(etat.resteACote ?? 0) < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(etat.resteACote ?? 0, devise)}</span></p>
+        </div>
+      </Groupe>
+      <p className="px-1 text-[13px] leading-snug text-encre-pale">
+        Argent prévu pour un achat en dehors du budget du jour (chaussures…). Après la saisie d’une dépense, choisis « À côté du budget » : elle ne touche pas ton budget du jour et reste dans sa catégorie au bilan. Le reste non utilisé ira dans Sécurité en fin de période.
+      </p>
 
       <TitreSection>Charges de la période</TitreSection>
       {charges.detailCharges.length === 0 ? <p className="px-1 text-[15px] text-encre-douce">Aucune charge fixe sur cette période.</p> : (

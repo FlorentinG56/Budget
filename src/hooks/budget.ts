@@ -48,10 +48,9 @@ export function etatBudget(c: ContexteBudget): EtatBudget {
     }
   }
   const enveloppe = enveloppeEffective(enCours, c.operations)
-  const aCote = enCours.aCote || c.operations.some((o) => o.horsBudget && o.date >= bornes.debut && o.date <= bornes.fin)
   return {
     etat: 'actif', periode: enCours, bornes, enveloppe, jour: calculerBudgetJour(enveloppe, c.operations, c.budget, bornes, c.date),
-    resteACote: aCote ? resteACote(enCours, c.operations, c.budget) : undefined,
+    resteACote: resteACote(enCours, c.operations, c.budget), // toujours affiché, même à 0
   }
 }
 
