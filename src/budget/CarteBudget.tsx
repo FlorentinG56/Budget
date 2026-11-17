@@ -83,16 +83,17 @@ export function CarteBudget({ devise }: { devise: Devise }) {
 export function Projection({ jour, devise }: { jour: { budgetJour: number; budgetJoursSuivants?: number; joursRestants: number }; devise: Devise }) {
   if (jour.budgetJoursSuivants === undefined) return null
   const ecart = jour.budgetJoursSuivants - jour.budgetJour
-  const couleur = ecart > 0 ? 'text-vert bg-vert-pale' : ecart < 0 ? 'text-rouge bg-rouge-pale' : 'text-encre-douce bg-fond'
   const n = jour.joursRestants - 1
+  // seule la flèche est colorée : vert si le montant monte, rouge s'il baisse, rien s'il ne bouge pas
+  const fleche = ecart > 0 ? <span className="text-vert" aria-label="en hausse">↗</span> : ecart < 0 ? <span className="text-rouge" aria-label="en baisse">↘</span> : null
   return (
-    <div className={`mt-2 flex items-center justify-between gap-2 rounded-[10px] px-3 py-2 ${couleur}`}>
-      <span className="text-[14px] leading-tight">
+    <div className="mt-2 flex items-center justify-between gap-2 rounded-[10px] bg-fond px-3 py-2">
+      <span className="text-[14px] leading-tight text-encre">
         <span className="block font-medium">{n > 1 ? `Les ${n} jours suivants` : 'Demain'}</span>
-        <span className="block text-[12px] opacity-80">si tu t’arrêtes là aujourd’hui</span>
+        <span className="block text-[12px] text-encre-pale">si tu t’arrêtes là aujourd’hui</span>
       </span>
-      <span className="shrink-0 text-[18px] font-bold">
-        {ecart > 0 ? '↗ ' : ecart < 0 ? '↘ ' : ''}{formaterMontant(jour.budgetJoursSuivants, devise)}<span className="text-[13px] font-medium">/jour</span>
+      <span className="flex shrink-0 items-center gap-1.5 text-[18px] font-bold text-encre">
+        {fleche}{formaterMontant(jour.budgetJoursSuivants, devise)}<span className="text-[13px] font-medium text-encre-douce">/jour</span>
       </span>
     </div>
   )
