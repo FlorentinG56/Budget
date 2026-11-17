@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { BarreOnglets, type Onglet } from './components/BarreOnglets'
 import { Feuille } from './components/Feuille'
 import { EcheancesCtx } from './components/BandeauEcheances'
@@ -9,12 +9,14 @@ import { SaisieRapide } from './saisie/SaisieRapide'
 import { EcranCreationCode, EcranDeverrouillage } from './lock/EcransVerrou'
 import { useVerrou } from './lock/Verrou'
 import { Accueil } from './screens/Accueil'
-import { Analyses } from './screens/Analyses'
 import { Calendrier } from './screens/Calendrier'
 import { Epargne } from './screens/Epargne'
 import { Reglages } from './screens/Reglages'
 
-const ECRANS: Record<Onglet, () => JSX.Element> = {
+// Les analyses (et leur bibliothèque de graphiques) ne sont chargées qu'à l'ouverture de l'onglet.
+const Analyses = lazy(() => import('./screens/Analyses').then((m) => ({ default: m.Analyses })))
+
+const ECRANS: Record<Onglet, React.ComponentType> = {
   accueil: Accueil,
   calendrier: Calendrier,
   analyses: Analyses,
@@ -79,7 +81,7 @@ export default function App() {
   return (
     <EcheancesCtx.Provider value={echeances}>
     <NavCtx.Provider value={nav}>
-      {pile.length > 0 ? <div key={pile.length}>{pile[pile.length - 1]}</div> : <Ecran />}
+      {pile.length > 0 ? <div key={pile.length}>{pile[pile.length - 1]}</div> : <Suspense fallback={<div className="h-full bg-fond" />}><Ecran /></Suspense>}
       <BarreOnglets actif={onglet} surChoix={(o) => (o === onglet ? setPile([]) : setOnglet(o))}
         surAjout={() => { setNumeroSaisie((n) => n + 1); setSaisie(true) }} />
       <Feuille ouverte={saisie} surFermer={() => setSaisie(false)} titre="Nouvelle opération" titreVisible={false}>
