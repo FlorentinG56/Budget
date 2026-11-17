@@ -12,6 +12,8 @@ import { modifierReglages } from '../db/db'
 import { ListeOperations } from './operations/ListeOperations'
 import { ListeCategories } from './reglages/Categories'
 import { ListeComptes } from './reglages/Comptes'
+import { PageSauvegarde } from './reglages/Sauvegarde'
+import { activerFaceId, faceIdDisponible } from '../security/faceid'
 import { ListeRecurrences } from './reglages/Recurrences'
 import { PeriodeBudget } from './reglages/PeriodeBudget'
 import { CHOIX_DELAI_VERROUILLAGE } from '../security/verrouillage'
@@ -73,14 +75,13 @@ export function Reglages() {
       <Groupe>
         <Ligne libelle="Modifier le code" surClic={() => setModal('code')} />
         <Ligne libelle="Verrouillage auto" valeur={libelleDelai} surClic={() => setModal('delai')} />
-        <Ligne libelle="Face ID" etape={10} />
+        <LigneFaceId />
         <Ligne libelle="Verrouiller maintenant" surClic={verrouiller} danger />
       </Groupe>
 
       <TitreSection>Sauvegarde</TitreSection>
       <Groupe>
-        <Ligne libelle="Sauvegarde chiffrée" etape={10} />
-        <Ligne libelle="Export CSV" etape={10} />
+        <Ligne libelle="Sauvegarde, restauration, export CSV" surClic={() => nav.ouvrir(<PageSauvegarde />)} />
       </Groupe>
 
       <TitreSection>Cet appareil</TitreSection>
@@ -92,7 +93,7 @@ export function Reglages() {
           surClic={async () => { setMaj('recherche'); setMaj(await rechercherMiseAJour()) }} />
       </Groupe>
       <p className="px-1 pb-2 text-[13px] leading-snug text-encre-pale">
-        Toutes les données restent sur cet iPhone. Supprimer l’icône de l’app efface ses données : pense à faire des sauvegardes (étape 10).
+        Toutes les données restent sur cet iPhone. Supprimer l’icône de l’app efface ses données : pense à faire des sauvegardes.
       </p>
 
       <Feuille ouverte={modal === 'delai'} surFermer={() => setModal(null)} titre="Verrouillage auto">
@@ -115,7 +116,7 @@ export function Reglages() {
         </Groupe>
       </Feuille>
       <Feuille ouverte={modal === 'rappel'} surFermer={() => setModal(null)} titre="Rappel de sauvegarde">
-        <p className="mb-3 text-[15px] text-encre-douce">Supprimer l’icône de l’app efface ses données : un bandeau te rappelle de faire une sauvegarde (disponible à l’étape 10).</p>
+        <p className="mb-3 text-[15px] text-encre-douce">Supprimer l’icône de l’app efface ses données : un bandeau te rappelle de faire une sauvegarde.</p>
         <Groupe>
           {[0, 7, 14, 30].map((j) => (
             <Ligne key={j} libelle={j === 0 ? 'Jamais' : `Tous les ${j} jours`} valeur={reglages?.rappelSauvegardeJours === j ? <span className="font-semibold text-bleu">✓</span> : null}
@@ -156,6 +157,42 @@ function ModifierCode({ surFin }: { surFin: () => void }) {
       ) : (
         <ChoixCode titreInitial="Nouveau code" surValide={async (pin) => { await changerPin(pin); setFait(true) }} />
       )}
+    </div>
+  )
+}
+
+function LigneFaceId() {
+  const reglages = useReglages()
+  const { rafraichirFaceId } = useVerrou()
+  const [dispo, setDispo] = useState<boolean | null>(null)
+  const [erreur, setErreur] = useState('')
+  useEffect(() => { void faceIdDisponible().then(setDispo) }, [])
+  const actif = !!reglages?.faceIdActive && !!reglages.faceIdIdentifiant
+  const basculer = async () => {
+    setErreur('')
+    if (actif) { await modifierReglages({ faceIdActive: false }); await rafraichirFaceId(); return }
+    try {
+      const id = await activerFaceId()
+      await modifierReglages({ faceIdActive: true, faceIdIdentifiant: id }); await rafraichirFaceId()
+    } catch {
+      setErreur('Face ID n’a pas pu être activé.')
+    }
+  }
+  return (
+    <div className="px-4 py-2">
+      <div className="flex min-h-[34px] items-center justify-between gap-3">
+        <span className="text-[17px] text-encre">Face ID</span>
+        {dispo === false ? <span className="text-[15px] text-encre-pale">Indisponible ici</span> : (
+          <button type="button" role="switch" aria-checked={actif} aria-label="Face ID" onClick={() => void basculer()} disabled={dispo === null}
+            className={`relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors ${actif ? 'bg-vert' : 'bg-trait'}`}>
+            <span className={`absolute top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow transition-transform ${actif ? 'translate-x-[22px]' : 'translate-x-[2px]'}`} />
+          </button>
+        )}
+      </div>
+      <p className="pb-1 text-[12px] leading-snug text-encre-pale">
+        {dispo === false ? 'Face ID n’est disponible que dans l’app installée sur l’iPhone.' : 'Raccourci pour ouvrir l’app ; ton code à 6 chiffres reste toujours valable.'}
+        {erreur && <span className="block text-rouge">{erreur}</span>}
+      </p>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { demanderStockagePersistant, lireReglages, modifierReglages } from '../db/db'
 import { delaiApresEchecs, hacherPin, verifierPin } from '../security/pin'
+import { verifierFaceId } from '../security/faceid'
 import { doitVerrouiller } from '../security/verrouillage'
 
 type Etat = 'chargement' | 'creation' | 'verrouille' | 'deverrouille'
@@ -18,6 +19,9 @@ interface ContexteVerrou {
   verrouiller: () => void
   changerDelai: (minutes: number) => Promise<void>
   bloqueJusqua: () => Promise<number>
+  faceId: boolean
+  deverrouillerFaceId: () => Promise<boolean>
+  rafraichirFaceId: () => Promise<void>
 }
 
 const Ctx = createContext<ContexteVerrou | null>(null)
@@ -32,10 +36,16 @@ export function VerrouProvider({ children }: { children: ReactNode }) {
   const [etat, setEtat] = useState<Etat>('chargement')
   const [delaiMinutes, setDelai] = useState(2)
   const masqueeDepuis = useRef<number | null>(null)
+  const [faceId, setFaceId] = useState(false)
+  const rafraichirFaceId = useCallback(async () => {
+    const r = await lireReglages()
+    setFaceId(r.faceIdActive && !!r.faceIdIdentifiant)
+  }, [])
 
   useEffect(() => {
     lireReglages().then((r) => {
       setDelai(r.verrouillageMinutes)
+      setFaceId(r.faceIdActive && !!r.faceIdIdentifiant)
       setEtat(r.pinHash ? 'verrouille' : 'creation')
     })
   }, [])
@@ -97,6 +107,16 @@ export function VerrouProvider({ children }: { children: ReactNode }) {
       setDelai(minutes)
     },
     bloqueJusqua: async () => (await lireReglages()).bloqueJusqua ?? 0,
+    faceId,
+    rafraichirFaceId,
+    deverrouillerFaceId: async () => {
+      const r = await lireReglages()
+      if (!r.faceIdActive || !r.faceIdIdentifiant) return false
+      if (r.bloqueJusqua && r.bloqueJusqua > Date.now()) return false // après trop d'erreurs de code : attendre
+      if (!(await verifierFaceId(r.faceIdIdentifiant))) return false
+      setEtat('deverrouille')
+      return true
+    },
   }
 
   return <Ctx.Provider value={valeur}>{children}</Ctx.Provider>

@@ -139,6 +139,7 @@ export interface Reglages {
   pinSel?: string // base64
   pinIterations?: number
   faceIdActive: boolean
+  faceIdIdentifiant?: string // identifiant (base64) de la clé Face ID créée sur cet iPhone
   derniereSauvegarde?: number
   verrouillageMinutes: number
   echecsPin: number

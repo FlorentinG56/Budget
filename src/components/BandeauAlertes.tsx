@@ -7,6 +7,7 @@ import { useNav } from '../nav/Navigation'
 import { PagePeriode } from '../budget/PagePeriode'
 import { ListeRecurrences } from '../screens/reglages/Recurrences'
 import { IconeFermer } from './Icones'
+import { PageSauvegarde } from '../screens/reglages/Sauvegarde'
 
 const CLE = 'alertes-masquees' // { [idAlerte]: date du jour où elle a été masquée }
 const STYLES = {
@@ -34,7 +35,7 @@ export function BandeauAlertes() {
       resteAujourdhui: etat.etat === 'actif' ? etat.jour.resteAujourdhui : undefined, devise,
       projection: ctx.budget.size ? calculerProjection(ctx, ctx.budget, true, 62) : undefined,
       derniereSauvegarde: reglages.derniereSauvegarde, rappelSauvegardeJours: reglages.rappelSauvegardeJours,
-      sauvegardeDisponible: false, // activé avec la sauvegarde chiffrée (étape 10)
+      sauvegardeDisponible: true,
       maintenant: Date.now(),
     })
   }, [ctx, etat, reglages])
@@ -52,6 +53,7 @@ export function BandeauAlertes() {
     if (a.cible === 'calendrier') nav.changerOnglet('calendrier')
     else if (a.cible === 'charges') nav.ouvrir(<ListeRecurrences genre="charges" />)
     else if (a.cible === 'periode' && etat.etat === 'actif') nav.ouvrir(<PagePeriode />)
+    else if (a.cible === 'sauvegarde') nav.ouvrir(<PageSauvegarde />)
   }
 
   return (

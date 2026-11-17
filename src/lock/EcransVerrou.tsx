@@ -22,13 +22,22 @@ export function messageEchec(res: ResultatPin): string | null {
 }
 
 export function EcranDeverrouillage() {
-  const { deverrouiller, bloqueJusqua } = useVerrou()
+  const { deverrouiller, bloqueJusqua, faceId, deverrouillerFaceId } = useVerrou()
   const [bloque, setBloque] = useState(0)
   useEffect(() => { void bloqueJusqua().then(setBloque) }, [bloqueJusqua])
+  // Face ID proposé tout de suite à l'ouverture ; le bouton permet de réessayer
+  useEffect(() => { if (faceId) void deverrouillerFaceId() }, [faceId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <PavePin
-      enHaut={<Logo />}
+      enHaut={<>
+        <Logo />
+        {faceId && (
+          <button type="button" onClick={() => void deverrouillerFaceId()} className="mt-3 min-h-[44px] rounded-full bg-bleu-pale px-4 text-[15px] font-semibold text-bleu active:opacity-70">
+            Déverrouiller avec Face ID
+          </button>
+        )}
+      </>}
       titre="Saisis ton code"
       bloqueJusqua={bloque}
       surCode={async (pin) => {
