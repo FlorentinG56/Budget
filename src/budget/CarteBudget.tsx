@@ -102,21 +102,23 @@ export function Projection({ jour, devise }: { jour: { budgetJour: number; budge
 }
 
 function LignesPrevisions({ previsions, devise }: { previsions: Previsions; devise: Devise }) {
-  const [ouvert, setOuvert] = useState(false)
+  const [revenusOuverts, setRevenusOuverts] = useState(false)
+  const [chargesOuvertes, setChargesOuvertes] = useState(true) // liste des charges visible d'emblée
+  const detail = (d: Previsions['detailCharges'][number], i: number) => (
+    <p key={i} className="flex justify-between pl-3 text-[13px] text-encre-pale">
+      <span>{d.estime ? '' : '✓ '}{d.libelle} · {court(d.date)}{d.estime ? ' (prévu)' : ''}</span><span>{formaterMontant(d.montant, devise)}</span>
+    </p>
+  )
   return (
     <div className="text-[15px]">
-      <button type="button" onClick={() => setOuvert(!ouvert)} className="flex w-full justify-between py-1 text-left">
-        <span className="text-encre-douce">Revenus de la période {ouvert ? '▴' : '▾'}</span><span className="font-semibold text-vert">{formaterMontant(previsions.revenus, devise, { signe: true })}</span>
+      <button type="button" onClick={() => setRevenusOuverts(!revenusOuverts)} aria-expanded={revenusOuverts} className="flex w-full justify-between py-1 text-left">
+        <span className="text-encre-douce">Revenus de la période {revenusOuverts ? '▴' : '▾'}</span><span className="font-semibold text-vert">{formaterMontant(previsions.revenus, devise, { signe: true })}</span>
       </button>
-      {ouvert && previsions.detailRevenus.map((d, i) => (
-        <p key={i} className="flex justify-between pl-3 text-[13px] text-encre-pale"><span>{d.libelle} · {court(d.date)}{d.estime ? ' (prévu)' : ''}</span><span>{formaterMontant(d.montant, devise)}</span></p>
-      ))}
-      <button type="button" onClick={() => setOuvert(!ouvert)} className="flex w-full justify-between py-1 text-left">
-        <span className="text-encre-douce">Charges fixes {ouvert ? '▴' : '▾'}</span><span className="font-semibold text-encre">{formaterMontant(-previsions.charges, devise)}</span>
+      {revenusOuverts && previsions.detailRevenus.map(detail)}
+      <button type="button" onClick={() => setChargesOuvertes(!chargesOuvertes)} aria-expanded={chargesOuvertes} className="flex w-full justify-between py-1 text-left">
+        <span className="text-encre-douce">Charges fixes {chargesOuvertes ? '▴' : '▾'}</span><span className="font-semibold text-encre">{formaterMontant(-previsions.charges, devise)}</span>
       </button>
-      {ouvert && previsions.detailCharges.map((d, i) => (
-        <p key={i} className="flex justify-between pl-3 text-[13px] text-encre-pale"><span>{d.libelle} · {court(d.date)}{d.estime ? ' (prévu)' : ''}</span><span>{formaterMontant(d.montant, devise)}</span></p>
-      ))}
+      {chargesOuvertes && (previsions.detailCharges.length ? previsions.detailCharges.map(detail) : <p className="pl-3 text-[13px] text-encre-pale">Aucune charge fixe sur cette période.</p>)}
     </div>
   )
 }

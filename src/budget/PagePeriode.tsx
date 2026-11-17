@@ -4,7 +4,7 @@ import { modifierEnveloppe, retirerDeEnveloppe } from '../db/actions'
 import { Bouton, Groupe } from '../components/formulaire'
 import { TitreSection } from '../components/ui'
 import { formaterMontant } from '../domain/argent'
-import { budgetDuJourA, depensesBudget } from '../domain/budget'
+import { budgetDuJourA, depensesBudget, previsionsPeriode } from '../domain/budget'
 import { libelleCourt, libelleJour, versISO } from '../domain/dates'
 import type { Devise } from '../domain/types'
 import { useBudget } from '../hooks/budget'
@@ -28,6 +28,8 @@ export function PagePeriode() {
   const jours: string[] = []
   // 1re période démarrée en cours de route : pas de budget « rétroactif » avant le démarrage
   for (let d = periode.demarrageLe ?? bornes.debut; d <= ctx.date; d = versISO(addDays(parseISO(d), 1))) jours.push(d)
+  const charges = previsionsPeriode(ctx.recurrences, ctx.operations, ctx.budget, bornes)
+  const resteAPrelever = charges.detailCharges.filter((c) => c.estime).reduce((t, c) => t + c.montant, 0)
   const nouvelle = edition !== null ? lireMontant(edition, true) : null
 
   return (
@@ -43,7 +45,7 @@ export function PagePeriode() {
                 <button type="button" onClick={() => void retirerDeEnveloppe(periode.id, a.operationId)} className="min-h-[36px] text-[13px] text-encre-pale">retirer</button></span>
             </p>
           ))}
-          <p className="flex justify-between border-t border-trait pt-1.5"><span className="font-semibold">Enveloppe</span><span className="font-bold text-bleu">{formaterMontant(enveloppe, devise)}</span></p>
+          <p className="flex justify-between border-t border-trait pt-1.5"><span className="font-semibold">Budget total</span><span className="font-bold text-bleu">{formaterMontant(enveloppe, devise)}</span></p>
           <p className="flex justify-between"><span className="text-encre-douce">Dépensé</span><span className="font-semibold">{formaterMontant(jour.depensePeriode, devise)}</span></p>
           <p className="flex justify-between"><span className="text-encre-douce">Reste pour {jour.joursRestants} jour{jour.joursRestants > 1 ? 's' : ''}</span>
             <span className={`font-semibold ${jour.restePeriode < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(jour.restePeriode, devise)}</span></p>
@@ -58,6 +60,27 @@ export function PagePeriode() {
           <div className="flex-1"><ChampMontant valeur={edition} surChange={setEdition} devise={devise} libelle="Enveloppe validée" /></div>
           <Bouton className="!w-auto" disabled={nouvelle === null} onClick={async () => { if (nouvelle !== null) { await modifierEnveloppe(periode.id, nouvelle); setEdition(null) } }}>OK</Bouton>
         </div>
+      )}
+
+      <TitreSection>Charges de la période</TitreSection>
+      {charges.detailCharges.length === 0 ? <p className="px-1 text-[15px] text-encre-douce">Aucune charge fixe sur cette période.</p> : (
+        <Groupe>
+          {charges.detailCharges.map((c, i) => (
+            <div key={i} className="flex min-h-[48px] items-center justify-between gap-3 px-4 py-2 text-[15px]">
+              <span className="flex min-w-0 items-center gap-2.5">
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] ${c.estime ? 'border-2 border-trait' : 'bg-vert text-white'}`}>{c.estime ? '' : '✓'}</span>
+                <span className="min-w-0"><span className="block truncate text-encre">{c.libelle}</span>
+                  <span className="block text-[12px] text-encre-pale">{court(c.date)} · {c.estime ? 'prévu' : 'prélevé'}</span></span>
+              </span>
+              <span className={`shrink-0 font-semibold ${c.estime ? 'text-encre-douce' : 'text-encre'}`}>{formaterMontant(-c.montant, devise)}</span>
+            </div>
+          ))}
+          <div className="flex min-h-[46px] items-center justify-between px-4 py-2 text-[15px]">
+            <span className="font-semibold text-encre">Total</span>
+            <span className="text-right"><span className="block font-bold text-encre">{formaterMontant(-charges.charges, devise)}</span>
+              {resteAPrelever > 0 && <span className="block text-[12px] text-encre-pale">dont {formaterMontant(resteAPrelever, devise)} encore à prélever</span>}</span>
+          </div>
+        </Groupe>
       )}
 
       <TitreSection>Jour par jour</TitreSection>
