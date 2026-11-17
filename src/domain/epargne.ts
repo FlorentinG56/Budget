@@ -32,7 +32,9 @@ export function totalParDevise(objectifs: ObjectifEpargne[], operations: Operati
     const d = devises.get(o.compteId)
     if (d) total.set(d, (total.get(d) ?? 0) + soldeObjectif(o, operations))
   }
-  return total
+  // ordre stable à l'affichage : dollars puis euros
+  const ordre: Devise[] = ['CAD', 'EUR']
+  return new Map([...total].sort((a, b) => ordre.indexOf(a[0]) - ordre.indexOf(b[0])))
 }
 
 /** Montant à mettre de côté par mois pour atteindre la cible à la date cible (undefined si sans objet). */
@@ -56,7 +58,7 @@ export function historiqueObjectif(o: ObjectifEpargne, operations: Operation[]):
     ...o.mouvements.map((m) => ({
       date: m.date, mouvementId: m.id,
       montant: m.sens === 'mise_de_cote' ? m.montant : -m.montant,
-      libelle: m.note || (m.source?.startsWith('paie:') ? 'Mis de côté à la paie' : m.source?.startsWith('bilan:') ? 'Reste de la période' : m.sens === 'mise_de_cote' ? 'Mis de côté' : 'Repris'),
+      libelle: m.note || (m.source?.startsWith('paie:') ? 'Mis de côté à la paie' : m.source?.startsWith('bilan:') ? 'Reste de la période' : m.source?.startsWith('acote:') ? 'Reste « à côté du budget »' : m.sens === 'mise_de_cote' ? 'Mis de côté' : 'Repris'),
     })),
     ...operations.filter((op) => op.objectifEpargneId === o.id).map((op) => ({
       date: op.date, operationId: op.id, montant: -op.montant, libelle: op.note || 'Dépense payée avec l’épargne',

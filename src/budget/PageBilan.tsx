@@ -5,7 +5,7 @@ import { Groupe } from '../components/formulaire'
 import { LigneOperation } from '../components/LigneOperation'
 import { TitreSection } from '../components/ui'
 import { formaterMontant } from '../domain/argent'
-import { bilanPeriode, depensesParCategorie, joursRespectes } from '../domain/budget'
+import { bilanPeriode, depensesParCategorie, depensesParFinancement, joursRespectes, resteACote } from '../domain/budget'
 import { libelleCourt } from '../domain/dates'
 import type { Devise, Periode } from '../domain/types'
 import { useContexteBudget } from '../hooks/budget'
@@ -35,6 +35,8 @@ function ContenuBilan({ periode, ctx, categories }: { periode: Periode; ctx: Non
   const jours = joursRespectes(periode, ctx.operations, ctx.budget, fin)
   const lignes = depensesParCategorie(ctx.operations, ctx.budget, periode.dateDebut, fin, precedente ? { debut: precedente.dateDebut, fin: precedente.dateFin } : undefined)
   const max = Math.max(1, ...lignes.map((l) => l.montant))
+  const fin2 = depensesParFinancement(ctx.operations, ctx.budget, periode.dateDebut, fin)
+  const resteCote = resteACote(periode, ctx.operations, ctx.budget)
   const cats = indexer(categories)
   const mapComptes = indexer(ctx.comptes)
 
@@ -50,10 +52,20 @@ function ContenuBilan({ periode, ctx, categories }: { periode: Periode; ctx: Non
           </p>
           <p className="flex justify-between"><span className="text-encre-douce">Jours dans le budget du jour</span><span className="font-semibold">{jours.respectes} / {jours.total}</span></p>
           {periode.epargneMiseDeCote > 0 && <p className="flex justify-between"><span className="text-encre-douce">Mis de côté à la paie</span><span className="font-semibold">{formaterMontant(periode.epargneMiseDeCote, devise)}</span></p>}
+          {(periode.aCote || fin2.aCote > 0) ? (<>
+            <p className="flex justify-between border-t border-trait pt-1.5"><span className="text-encre-douce">🛍️ À côté du budget</span><span className="font-semibold">{formaterMontant(periode.aCote ?? 0, devise)}</span></p>
+            <p className="flex justify-between"><span className="text-encre-douce">Dépensé à côté</span><span className="font-semibold">{formaterMontant(fin2.aCote, devise)}</span></p>
+            <p className="flex justify-between"><span className="text-encre-douce">{enCours ? 'Reste à côté' : resteCote >= 0 ? 'Reste à côté → épargne' : 'Dépassement à côté'}</span>
+              <span className={`font-semibold ${resteCote < 0 ? 'text-rouge' : resteCote > 0 ? 'text-vert' : ''}`}>{formaterMontant(resteCote, devise)}</span></p>
+          </>) : null}
+          {fin2.epargne > 0 && <p className="flex justify-between"><span className="text-encre-douce">🐷 Payé avec l’épargne</span><span className="font-semibold">{formaterMontant(fin2.epargne, devise)}</span></p>}
         </div>
       </Groupe>
 
       <TitreSection>Dépenses par catégorie</TitreSection>
+      {(fin2.aCote > 0 || fin2.epargne > 0) && (
+        <p className="-mt-1 px-1 text-[13px] text-encre-pale">Toutes les dépenses : budget du jour ({formaterMontant(fin2.budget, devise)}), à côté ({formaterMontant(fin2.aCote, devise)}) et payées avec l’épargne ({formaterMontant(fin2.epargne, devise)}).</p>
+      )}
       {lignes.length === 0 ? <p className="px-1 text-[15px] text-encre-douce">Aucune dépense.</p> : (
         <Groupe>
           {lignes.map((l) => {

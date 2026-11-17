@@ -47,6 +47,7 @@ export interface Operation {
   partCapital?: Centimes // mensualité de crédit : part qui rembourse le capital
   echeance?: DateISO // opération issue d'une récurrence : date d'échéance prévue (peut différer de la date réelle)
   objectifEpargneId?: string // dépense payée avec l'épargne : retirée de l'objectif, hors budget du jour
+  horsBudget?: boolean // dépense « à côté du budget » : payée avec le non affecté laissé sur le compte, hors budget du jour
   creeLe: number // horodatage de saisie
 }
 
@@ -103,6 +104,8 @@ export interface Periode {
   reportPrecedent: Centimes // ancien fonctionnement (report) : 0 désormais
   ajouts: AjoutEnveloppe[]
   demarrageLe?: DateISO // 1re période commencée en cours de route : jour du démarrage du budget
+  aCote?: Centimes // non affecté laissé sur le compte à la paie, utilisable hors budget du jour
+  aCoteVersSecurite?: Centimes // fin de période : reste « à côté » rangé dans Sécurité
   cloturee: boolean
   affectationFin?: AffectationFin // choix fait au bilan
   montantAffecte?: Centimes // reste (ou déficit) concerné par ce choix

@@ -28,14 +28,14 @@ export function EditionOperation({ id }: { id: string }) {
   const [categorieId, setCategorieId] = useState('')
   const [sousCategorieId, setSousCategorieId] = useState('')
   const [note, setNote] = useState('')
-  const [objectifId, setObjectifId] = useState('')
+  const [objectifId, setObjectifId] = useState('') // '' : compté dans le budget ; 'acote' : à côté ; sinon id d'objectif
   const objectifs = useObjectifs()
   const [confirmerSuppression, setConfirmer] = useState(false)
 
   useEffect(() => {
     if (!op) return
     setMontant(versTexte(op.montant)); setDate(op.date); setCompteId(op.compteId)
-    setCategorieId(op.categorieId ?? ''); setSousCategorieId(op.sousCategorieId ?? ''); setNote(op.note ?? ''); setObjectifId(op.objectifEpargneId ?? '')
+    setCategorieId(op.categorieId ?? ''); setSousCategorieId(op.sousCategorieId ?? ''); setNote(op.note ?? ''); setObjectifId(op.objectifEpargneId ?? (op.horsBudget ? 'acote' : ''))
   }, [op?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (op === undefined || !comptes || !categories) return <Page titre="Opération"><div /></Page>
@@ -61,7 +61,8 @@ export function EditionOperation({ id }: { id: string }) {
       categorieId: avecCategorie ? categorieId || undefined : op.categorieId,
       sousCategorieId: avecCategorie ? sousCategorieId || undefined : op.sousCategorieId,
       note: note.trim() || undefined,
-      objectifEpargneId: op.type === 'depense' ? objectifId || undefined : op.objectifEpargneId,
+      objectifEpargneId: op.type === 'depense' ? (objectifId && objectifId !== 'acote' ? objectifId : undefined) : op.objectifEpargneId,
+      horsBudget: op.type === 'depense' ? (objectifId === 'acote' ? true : undefined) : op.horsBudget,
     })
     retour()
   }
@@ -122,13 +123,13 @@ export function EditionOperation({ id }: { id: string }) {
         const c = comptes.find((x) => x.id === compteId)
         const compteEpargne = c?.type === 'carte_credit' ? c.compteRemboursementId : compteId
         const possibles = (objectifs ?? []).filter((o) => o.compteId === compteEpargne && (!o.archive || o.id === objectifId))
-        if (possibles.length === 0) return null
         return (
           <Groupe>
-            <Champ libelle="Payé avec l’épargne" aide={objectifId ? 'Hors budget du jour' : undefined}>
+            <Champ libelle="Budget du jour" aide={objectifId ? 'Hors budget du jour, toujours dans sa catégorie' : undefined}>
               <Choix value={objectifId} onChange={(e) => setObjectifId(e.target.value)}>
-                <option value="">Non</option>
-                {possibles.map((o) => <option key={o.id} value={o.id}>{o.nom}</option>)}
+                <option value="">Comptée</option>
+                <option value="acote">À côté du budget</option>
+                {possibles.map((o) => <option key={o.id} value={o.id}>Payée avec l’épargne {o.nom}</option>)}
               </Choix>
             </Champ>
           </Groupe>

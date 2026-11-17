@@ -207,6 +207,7 @@ function Confirmation({ op, categories, devise, nomCompte, surFermer, surMaj }: 
   // « Payé avec l'épargne » : objectifs du compte (ou du compte qui rembourse la carte)
   const compteOp = ctx?.comptes.find((c) => c.id === op.compteId)
   const compteEpargne = compteOp?.type === 'carte_credit' ? compteOp.compteRemboursementId : op.compteId
+  const proposerACote = op.type === 'depense' && !!ctx?.budget.has(op.compteId) && etat.etat === 'actif' && op.date >= etat.bornes.debut && op.date <= etat.bornes.fin
   const objectifsPossibles = op.type === 'depense' ? (objectifs ?? []).filter((o) => !o.archive && o.compteId === compteEpargne) : []
   // revenu ponctuel (pas une paie prévue) ou virement reçu sur un compte du budget, pendant la période en cours
   const montantPourBudget = op.type === 'revenu' && !op.recurrenceId && ctx?.budget.has(op.compteId) ? op.montant
@@ -269,21 +270,28 @@ function Confirmation({ op, categories, devise, nomCompte, surFermer, surMaj }: 
         </div>
       )}
 
-      {objectifsPossibles.length > 0 && (
+      {op.type === 'depense' && (proposerACote || objectifsPossibles.length > 0) && (
         <div>
-          <p className="mb-1.5 px-1 text-[13px] font-semibold uppercase tracking-wide text-encre-pale">Imprévu ? Payé avec l’épargne</p>
+          <p className="mb-1.5 px-1 text-[13px] font-semibold uppercase tracking-wide text-encre-pale">Hors budget du jour ?</p>
           <div className="flex flex-wrap gap-2">
+            {proposerACote && etat.etat === 'actif' && (
+              <button type="button" aria-pressed={!!op.horsBudget} onClick={() => void maj({ horsBudget: op.horsBudget ? undefined : true, objectifEpargneId: undefined })}
+                className={`min-h-[40px] rounded-full px-3.5 text-[15px] font-medium shadow-carte ${op.horsBudget ? 'bg-bleu text-white' : 'bg-white text-encre'}`}>
+                {op.horsBudget ? '✓ ' : '🛍️ '}À côté du budget <span className={op.horsBudget ? 'text-white/80' : 'text-encre-pale'}>(reste {formaterMontant(etat.resteACote ?? 0, devise)})</span>
+              </button>
+            )}
             {objectifsPossibles.map((o) => {
               const actif = op.objectifEpargneId === o.id
               return (
-                <button key={o.id} type="button" onClick={() => void maj({ objectifEpargneId: actif ? undefined : o.id })} aria-pressed={actif}
+                <button key={o.id} type="button" onClick={() => void maj({ objectifEpargneId: actif ? undefined : o.id, horsBudget: undefined })} aria-pressed={actif}
                   className={`min-h-[40px] rounded-full px-3.5 text-[15px] font-medium shadow-carte ${actif ? 'bg-vert text-white' : 'bg-white text-encre'}`}>
                   {actif ? '✓ ' : '🐷 '}{o.nom} <span className={actif ? 'text-white/80' : 'text-encre-pale'}>({formaterMontant(soldeObjectif(o, ctx?.operations ?? []), devise)})</span>
                 </button>
               )
             })}
           </div>
-          {op.objectifEpargneId && <p className="mt-1 px-1 text-[12px] text-encre-pale">Retirée de l’épargne, elle ne compte pas dans ton budget du jour.</p>}
+          {op.horsBudget && <p className="mt-1 px-1 text-[12px] text-encre-pale">Payée avec l’argent laissé à côté du budget : elle ne compte pas dans ton budget du jour, mais reste dans sa catégorie au bilan.</p>}
+          {op.objectifEpargneId && <p className="mt-1 px-1 text-[12px] text-encre-pale">Retirée de l’épargne : elle ne compte pas dans ton budget du jour, mais reste dans sa catégorie au bilan.</p>}
         </div>
       )}
 

@@ -175,6 +175,15 @@ describe('bilan détaillé', () => {
       ['loisirs', 0, 0, 0, 5000], // dépensée la période d'avant, plus celle-ci
     ])
   })
+  it('les catégories comptent aussi les dépenses à côté du budget et payées avec l’épargne', () => {
+    const ops = [
+      op({ date: '2026-11-26', montant: 2000, categorieId: 'alim' }),
+      op({ date: '2026-11-27', montant: 15000, categorieId: 'sport', horsBudget: true }),
+      op({ date: '2026-11-28', montant: 40000, categorieId: 'transport', objectifEpargneId: 'sec' }),
+    ]
+    const l = depensesParCategorie(ops, budget, '2026-11-25', '2026-12-08')
+    expect(l.map((x) => [x.categorieId, x.montant])).toEqual([['transport', 40000], ['sport', 15000], ['alim', 2000]])
+  })
   it('jours où le budget du jour a été respecté', () => {
     // 500 $ / 14 j = 35,71 $ ; le 1er jour 50 $ (dépassé), puis rien
     const r = joursRespectes(per, [op({ date: '2026-11-25', montant: 5000 })], budget)
@@ -238,5 +247,29 @@ describe('crédits dans les charges de la période', () => {
   it('payé par carte : déduit aussi', () => {
     const parCarte = { ...auto, moyenPaiement: 'carte' as const, carteId: 'cc' }
     expect(periodesAVenir(p, [p, parCarte], [], budget, [], '2026-11-17', 1, 50000)[0].previsions.charges).toBe(35000)
+  })
+})
+
+import { depensesParFinancement, resteACote, versSecuriteEnFin } from './budget'
+
+describe('à côté du budget', () => {
+  const per: Periode = { id: 'p', dateDebut: '2026-11-25', dateFin: '2026-12-08', enveloppeValidee: 50000, epargneMiseDeCote: 15000, reportPrecedent: 0, ajouts: [], cloturee: false, aCote: 15000 }
+  const chaussures = op({ date: '2026-11-27', montant: 12000, categorieId: 'sport', horsBudget: true })
+  const cafe = op({ date: '2026-11-27', montant: 500 })
+  it('une dépense à côté ne compte pas dans le budget du jour', () => {
+    expect(depensesBudget([chaussures, cafe], budget, '2026-11-25', '2026-12-08')).toBe(500)
+    const j = calculerBudgetJour(50000, [chaussures, cafe], budget, { debut: '2026-11-25', fin: '2026-12-08' }, '2026-11-28')
+    expect(j.depensePeriode).toBe(500)
+  })
+  it('répartition par financement et reste à côté', () => {
+    const garage = op({ date: '2026-11-28', montant: 30000, objectifEpargneId: 'sec' })
+    expect(depensesParFinancement([chaussures, cafe, garage], budget, '2026-11-25', '2026-12-08')).toEqual({ budget: 500, aCote: 12000, epargne: 30000 })
+    expect(resteACote(per, [chaussures], budget)).toBe(3000)
+    expect(resteACote(per, [chaussures, op({ date: '2026-11-29', montant: 5000, horsBudget: true })], budget)).toBe(-2000)
+    expect(resteACote({ ...per, aCote: undefined }, [], budget)).toBe(0)
+  })
+  it('fin de période : reste du budget + reste à côté vers Sécurité (jamais négatif)', () => {
+    expect(versSecuriteEnFin({ enveloppe: 50000, depense: 45000, ecart: 5000 }, 3000)).toEqual({ budget: 5000, aCote: 3000 })
+    expect(versSecuriteEnFin({ enveloppe: 50000, depense: 52000, ecart: -2000 }, -1000)).toEqual({ budget: 0, aCote: 0 })
   })
 })

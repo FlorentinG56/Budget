@@ -101,7 +101,7 @@ export function enveloppeProposee(prev: Pick<Previsions, 'revenus' | 'charges'>,
 export function depensesBudget(operations: Operation[], budget: Set<string>, du: DateISO, au: DateISO): Centimes {
   let total = 0
   for (const op of operations) {
-    if (op.type === 'depense' && !op.objectifEpargneId && budget.has(op.compteId) && op.date >= du && op.date <= au) total += op.montant
+    if (op.type === 'depense' && !op.objectifEpargneId && !op.horsBudget && budget.has(op.compteId) && op.date >= du && op.date <= au) total += op.montant
   }
   return total
 }
@@ -182,12 +182,12 @@ export interface LigneCategorie {
   precedent?: Centimes // même catégorie, période précédente
 }
 
-/** Dépenses du budget par catégorie principale, de la plus grosse à la plus petite. */
+/** Toutes les dépenses (dans le budget, à côté, payées avec l'épargne) par catégorie principale, de la plus grosse à la plus petite. */
 export function depensesParCategorie(operations: Operation[], budget: Set<string>, du: DateISO, au: DateISO, precedente?: Bornes): LigneCategorie[] {
   const somme = (d: DateISO, a: DateISO) => {
     const m = new Map<string | null, { montant: number; nombre: number }>()
     for (const op of operations) {
-      if (op.type !== 'depense' || op.objectifEpargneId || !budget.has(op.compteId) || op.date < d || op.date > a) continue
+      if (op.type !== 'depense' || !budget.has(op.compteId) || op.date < d || op.date > a) continue
       const k = op.categorieId ?? null
       const x = m.get(k) ?? { montant: 0, nombre: 0 }
       m.set(k, { montant: x.montant + op.montant, nombre: x.nombre + 1 })
@@ -261,4 +261,34 @@ export function periodesAVenir(paie: Recurrence, recurrences: Recurrence[], oper
     curseur = lendemain(b.fin)
   }
   return liste
+}
+
+// ---------- « À côté du budget » ----------
+
+export interface Financement {
+  budget: Centimes // dépenses comptées dans le budget du jour
+  aCote: Centimes // dépenses « à côté du budget »
+  epargne: Centimes // dépenses payées avec l'épargne
+}
+
+/** Répartition des dépenses d'une période selon leur financement. */
+export function depensesParFinancement(operations: Operation[], budget: Set<string>, du: DateISO, au: DateISO): Financement {
+  const f: Financement = { budget: 0, aCote: 0, epargne: 0 }
+  for (const op of operations) {
+    if (op.type !== 'depense' || !budget.has(op.compteId) || op.date < du || op.date > au) continue
+    if (op.objectifEpargneId) f.epargne += op.montant
+    else if (op.horsBudget) f.aCote += op.montant
+    else f.budget += op.montant
+  }
+  return f
+}
+
+/** Ce qui reste « à côté du budget » : non affecté laissé sur le compte − dépenses à côté (peut être négatif). */
+export function resteACote(periode: Periode, operations: Operation[], budget: Set<string>): Centimes {
+  return (periode.aCote ?? 0) - depensesParFinancement(operations, budget, periode.dateDebut, periode.dateFin).aCote
+}
+
+/** Fin de période : ce qui part en Sécurité = reste du budget (si positif) + reste à côté (si positif). */
+export function versSecuriteEnFin(bilan: Bilan, resteCote: Centimes): { budget: Centimes; aCote: Centimes } {
+  return { budget: Math.max(0, bilan.ecart), aCote: Math.max(0, resteCote) }
 }

@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import {
   bilanPeriode, calculerBudgetJour, comptesBudget, depensesBudget, enveloppeEffective, periodeCourante,
-  previsionsPeriode, prochaineDatePaie, recurrencePaie, type Bilan, type Bornes, type BudgetJour, type Previsions,
+  previsionsPeriode, prochaineDatePaie, recurrencePaie, resteACote, type Bilan, type Bornes, type BudgetJour, type Previsions,
 } from '../domain/budget'
 import { aujourdhui } from '../domain/dates'
 import type { Compte, Operation, Periode, Recurrence } from '../domain/types'
@@ -14,7 +14,7 @@ export type EtatBudget =
   | { etat: 'avant'; prochaine?: string }
   | { etat: 'bilan'; periode: Periode; bilan: Bilan; bornes: Bornes }
   | { etat: 'a_valider'; bornes: Bornes; previsions: Previsions; proposition: number; premiere: boolean; depenseJusquIci: number }
-  | { etat: 'actif'; periode: Periode; bornes: Bornes; enveloppe: number; jour: BudgetJour }
+  | { etat: 'actif'; periode: Periode; bornes: Bornes; enveloppe: number; jour: BudgetJour; resteACote?: number }
 
 export interface ContexteBudget {
   comptes: Compte[]
@@ -48,7 +48,11 @@ export function etatBudget(c: ContexteBudget): EtatBudget {
     }
   }
   const enveloppe = enveloppeEffective(enCours, c.operations)
-  return { etat: 'actif', periode: enCours, bornes, enveloppe, jour: calculerBudgetJour(enveloppe, c.operations, c.budget, bornes, c.date) }
+  const aCote = enCours.aCote || c.operations.some((o) => o.horsBudget && o.date >= bornes.debut && o.date <= bornes.fin)
+  return {
+    etat: 'actif', periode: enCours, bornes, enveloppe, jour: calculerBudgetJour(enveloppe, c.operations, c.budget, bornes, c.date),
+    resteACote: aCote ? resteACote(enCours, c.operations, c.budget) : undefined,
+  }
 }
 
 export function useContexteBudget(): ContexteBudget | undefined {

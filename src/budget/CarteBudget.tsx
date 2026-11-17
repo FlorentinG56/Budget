@@ -3,7 +3,7 @@ import { cloturerPeriode, validerPeriode } from '../db/actions'
 import { Bouton } from '../components/formulaire'
 import { IconeChevron } from '../components/Icones'
 import { formaterMontant } from '../domain/argent'
-import { affectationAutomatique, depensesParCategorie, joursDansPeriode, nonAffecte, type Bornes, type Previsions } from '../domain/budget'
+import { affectationAutomatique, depensesParCategorie, depensesParFinancement, joursDansPeriode, nonAffecte, resteACote, versSecuriteEnFin, type Bornes, type Previsions } from '../domain/budget'
 import { aujourdhui, libelleCourt } from '../domain/dates'
 import type { Devise } from '../domain/types'
 import { useCategories } from '../hooks/donnees'
@@ -60,6 +60,12 @@ export function CarteBudget({ devise }: { devise: Devise }) {
             Budget du jour {formaterMontant(jour.budgetJour, devise)}{jour.depenseAujourdhui > 0 && <> · dépensé {formaterMontant(jour.depenseAujourdhui, devise)}</>}
           </p>
           {jour.budgetJoursSuivants !== undefined && <Projection jour={jour} devise={devise} />}
+          {etat.resteACote !== undefined && (
+            <p className="mt-2 flex items-center justify-between rounded-[10px] bg-fond px-3 py-2 text-[14px]">
+              <span className="text-encre">🛍️ À côté du budget</span>
+              <span className={`font-bold ${etat.resteACote < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(etat.resteACote, devise)}</span>
+            </p>
+          )}
           <div className="mt-3 space-y-2.5">
             <div>
               <p className="mb-1 flex justify-between text-[13px] text-encre-douce">
@@ -137,8 +143,9 @@ function Validation({ etat, devise }: { etat: Extract<EtatBudget, { etat: 'a_val
   const [reste, setReste] = useState(versTexteMontant(Math.max(0, proposition - depenseJusquIci)))
   const enveloppe = premiere ? (lireMontant(reste) ?? NaN) + depenseJusquIci : enveloppeSaisie ?? NaN
 
+  const aCote = aDecider && Number.isFinite(epargne) ? Math.max(0, libre - epargne) : 0
   const valider = () => validerPeriode({ debut: bornes.debut, fin: bornes.fin, enveloppe, epargne: premiere ? 0 : epargne, report: 0,
-    demarrageLe: premiere ? aujourdhui() : undefined })
+    demarrageLe: premiere ? aujourdhui() : undefined, aCote: premiere ? 0 : aCote })
 
   return (
     <section className="rounded-carte bg-white p-4 shadow-carte">
@@ -187,6 +194,11 @@ function Validation({ etat, devise }: { etat: Extract<EtatBudget, { etat: 'a_val
                   {Number.isFinite(epargne) && epargne > libre && <p className="mt-1 text-[12px] text-encre-pale">C’est plus que le non affecté prévu.</p>}
                 </div>
               )}
+              {(choix === 'partie' || choix === 'rien') && aCote > 0 && (
+                <p className="mt-2 rounded-[10px] bg-fond px-3 py-2 text-[13px] leading-snug text-encre-douce">
+                  🛍️ <b className="text-encre">{formaterMontant(aCote, devise)} à côté du budget</b> : pour un achat prévu (chaussures…), hors budget du jour. Ce qui n’est pas utilisé ira dans Sécurité en fin de période.
+                </p>
+              )}
             </div>
           ) : libre < 0 ? (
             <p className="pt-1 text-[13px] leading-snug text-rouge">Ta paie ne couvre pas les charges et le budget de cette période : le solde du compte baissera de {formaterMontant(-libre, devise)}. Rien à mettre de côté.</p>
@@ -210,6 +222,9 @@ function Bilan({ etat, devise }: { etat: Extract<EtatBudget, { etat: 'bilan' }>;
   const categories = useCategories()
   const { periode, bilan } = etat
   const positif = bilan.ecart > 0
+  const fin = ctx ? depensesParFinancement(ctx.operations, ctx.budget, periode.dateDebut, periode.dateFin) : undefined
+  const resteCote = ctx ? resteACote(periode, ctx.operations, ctx.budget) : 0
+  const versSec = versSecuriteEnFin(bilan, resteCote)
   const lignes = ctx ? depensesParCategorie(ctx.operations, ctx.budget, periode.dateDebut, periode.dateFin).filter((l) => l.montant > 0).slice(0, 3) : []
   const cats = new Map((categories ?? []).map((c) => [c.id, c]))
   return (
@@ -224,6 +239,14 @@ function Bilan({ etat, devise }: { etat: Extract<EtatBudget, { etat: 'bilan' }>;
           <span className={`text-[20px] font-bold ${positif ? 'text-vert' : bilan.ecart < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(Math.abs(bilan.ecart), devise)}</span>
         </p>
       </div>
+      {fin && (periode.aCote || fin.aCote > 0) ? (
+        <div className="mt-2 space-y-1 border-t border-trait pt-2 text-[15px]">
+          <p className="flex justify-between"><span className="text-encre-douce">🛍️ À côté du budget</span><span className="font-semibold">{formaterMontant(periode.aCote ?? 0, devise)}</span></p>
+          <p className="flex justify-between"><span className="text-encre-douce">Dépensé à côté</span><span className="font-semibold">{formaterMontant(fin.aCote, devise)}</span></p>
+          <p className="flex justify-between"><span className="font-semibold text-encre">{resteCote >= 0 ? 'Reste → épargne' : 'Dépassement'}</span>
+            <span className={`font-bold ${resteCote > 0 ? 'text-vert' : resteCote < 0 ? 'text-rouge' : ''}`}>{formaterMontant(Math.abs(resteCote), devise)}</span></p>
+        </div>
+      ) : null}
       {lignes.length > 0 && (
         <div className="mt-2 space-y-1">
           {lignes.map((l) => {
@@ -239,9 +262,11 @@ function Bilan({ etat, devise }: { etat: Extract<EtatBudget, { etat: 'bilan' }>;
       )}
       <div className="mt-3 flex gap-2">
         <Bouton variante="secondaire" onClick={() => nav.ouvrir(<PageBilan periodeId={periode.id} />)}>Bilan complet</Bouton>
-        <Bouton onClick={() => void cloturerPeriode(periode.id, affectationAutomatique(bilan.ecart), bilan.ecart)}>Continuer</Bouton>
+        <Bouton onClick={() => void cloturerPeriode(periode.id, affectationAutomatique(bilan.ecart), bilan.ecart, versSec.aCote)}>Continuer</Bouton>
       </div>
-      {positif && <p className="mt-2 text-[12px] leading-snug text-encre-pale">En touchant « Continuer », le reste est rangé dans ton objectif « Sécurité ». Le bilan reste consultable dans l’historique.</p>}
+      {versSec.budget + versSec.aCote > 0 && (
+        <p className="mt-2 text-[12px] leading-snug text-encre-pale">En touchant « Continuer », {formaterMontant(versSec.budget + versSec.aCote, devise)} sont rangés dans ton objectif « Sécurité ». Le bilan reste consultable dans l’historique.</p>
+      )}
     </section>
   )
 }

@@ -160,11 +160,12 @@ export async function rembourserCarte(carteId: string, montant: Centimes, date: 
 
 export const idPeriode = (dateDebut: string) => `p-${dateDebut}`
 
-export async function validerPeriode(p: { debut: string; fin: string; enveloppe: Centimes; epargne: Centimes; report: Centimes; demarrageLe?: string }, base: BudgetDB = db): Promise<Periode> {
+export async function validerPeriode(p: { debut: string; fin: string; enveloppe: Centimes; epargne: Centimes; report: Centimes; demarrageLe?: string; aCote?: Centimes }, base: BudgetDB = db): Promise<Periode> {
   const periode: Periode = {
     id: idPeriode(p.debut), dateDebut: p.debut, dateFin: p.fin, enveloppeValidee: p.enveloppe,
     epargneMiseDeCote: p.epargne, reportPrecedent: p.report, ajouts: [], cloturee: false,
     ...(p.demarrageLe && p.demarrageLe > p.debut ? { demarrageLe: p.demarrageLe } : {}),
+    ...(p.aCote && p.aCote > 0 ? { aCote: p.aCote } : {}),
   }
   await base.periodes.put(periode)
   if (periode.epargneMiseDeCote > 0) await synchroniserSecurite(base)
@@ -176,9 +177,9 @@ export async function modifierEnveloppe(periodeId: string, enveloppe: Centimes, 
 }
 
 /** Bilan de fin de période : le reste va en épargne ou est reporté ; un déficit peut être retiré de la suivante. */
-export async function cloturerPeriode(periodeId: string, affectation: AffectationFin, montant: Centimes, base: BudgetDB = db) {
-  await base.periodes.update(periodeId, { cloturee: true, affectationFin: affectation, montantAffecte: montant })
-  if (affectation === 'epargne') await synchroniserSecurite(base)
+export async function cloturerPeriode(periodeId: string, affectation: AffectationFin, montant: Centimes, aCoteVersSecurite = 0, base: BudgetDB = db) {
+  await base.periodes.update(periodeId, { cloturee: true, affectationFin: affectation, montantAffecte: montant, aCoteVersSecurite: Math.max(0, aCoteVersSecurite) })
+  if (affectation === 'epargne' || aCoteVersSecurite > 0) await synchroniserSecurite(base)
 }
 
 /** Revenu ponctuel ou virement reçu en cours de période : « l'ajouter à l'enveloppe ? » */
@@ -242,6 +243,9 @@ export async function synchroniserSecurite(base: BudgetDB = db): Promise<string 
       if (p.epargneMiseDeCote > 0) attendus.set(`paie:${p.id}`, { date: p.dateDebut, montant: p.epargneMiseDeCote, sens: 'mise_de_cote', source: `paie:${p.id}` })
       if (p.cloturee && p.affectationFin === 'epargne' && (p.montantAffecte ?? 0) > 0) {
         attendus.set(`bilan:${p.id}`, { date: p.dateFin, montant: p.montantAffecte!, sens: 'mise_de_cote', source: `bilan:${p.id}` })
+      }
+      if (p.cloturee && (p.aCoteVersSecurite ?? 0) > 0) {
+        attendus.set(`acote:${p.id}`, { date: p.dateFin, montant: p.aCoteVersSecurite!, sens: 'mise_de_cote', source: `acote:${p.id}` })
       }
     }
     let changement = false

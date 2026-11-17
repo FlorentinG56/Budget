@@ -24,6 +24,7 @@ describe('épargne virtuelle', () => {
     const comptes = [{ id: 'chq', devise: 'CAD' }, { id: 'ca', devise: 'EUR' }] as Compte[]
     expect(epargneReservee([securite, france, archive], [imprevu], 'chq')).toBe(33095)
     expect([...totalParDevise([securite, france, archive], [imprevu], comptes)]).toEqual([['CAD', 33095], ['EUR', 500000]])
+    expect([...totalParDevise([france, securite], [], comptes)].map(([d]) => d)).toEqual(['CAD', 'EUR']) // ordre stable
   })
   it('progression et montant par mois pour atteindre la cible', () => {
     expect(progressionObjectif(25000, 100000)).toBe(0.25)
