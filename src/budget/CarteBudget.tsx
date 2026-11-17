@@ -128,8 +128,11 @@ function Validation({ etat, devise }: { etat: Extract<EtatBudget, { etat: 'a_val
   const [texteEnveloppe, setTexteEnveloppe] = useState(versTexteMontant(proposition))
   const enveloppeSaisie = lireMontant(texteEnveloppe)
   const libre = nonAffecte(previsions, enveloppeSaisie ?? proposition)
-  const [texteEpargne, setTexteEpargne] = useState<string | null>(null) // null : suit le non affecté
-  const epargne = texteEpargne === null ? Math.max(0, libre) : lireMontant(texteEpargne) ?? NaN
+  // ce qu'on fait du non affecté : rien n'est choisi d'avance
+  const [choix, setChoix] = useState<null | 'tout' | 'partie' | 'rien'>(null)
+  const [textePartie, setTextePartie] = useState('')
+  const aDecider = libre > 0
+  const epargne = !aDecider || choix === 'rien' ? 0 : choix === 'tout' ? libre : choix === 'partie' ? lireMontant(textePartie) ?? NaN : NaN
   // 1re période (démarrage en cours de route) : on demande ce qu'il reste à dépenser
   const [reste, setReste] = useState(versTexteMontant(Math.max(0, proposition - depenseJusquIci)))
   const enveloppe = premiere ? (lireMontant(reste) ?? NaN) + depenseJusquIci : enveloppeSaisie ?? NaN
@@ -166,15 +169,37 @@ function Validation({ etat, devise }: { etat: Extract<EtatBudget, { etat: 'a_val
               <span className={`font-bold ${libre < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(libre, devise)}</span>
             </p>
           </div>
-          <p className="pt-1 text-[15px] font-medium text-encre">💰 Combien tu mets de côté (Sécurité) ?</p>
-          <ChampMontant valeur={texteEpargne ?? versTexteMontant(Math.max(0, libre))} surChange={setTexteEpargne} devise={devise} libelle="Épargne mise de côté" />
-          {libre < 0 && <p className="text-[12px] leading-snug text-rouge">Ta paie ne couvre pas les charges et le budget de cette période : le solde du compte baissera de {formaterMontant(-libre, devise)}.</p>}
+          {aDecider ? (
+            <div className="pt-2">
+              <p className="text-[15px] font-semibold text-encre">💰 Non affecté prévu : {formaterMontant(libre, devise)}</p>
+              <p className="text-[13px] text-encre-douce">Qu’est-ce qu’on en fait ?</p>
+              <div className="mt-2 flex flex-col gap-1.5" role="radiogroup" aria-label="Que faire du non affecté">
+                {([['tout', `Tout en Sécurité (${formaterMontant(libre, devise)})`], ['partie', 'Une partie…'], ['rien', 'Le laisser sur le compte']] as const).map(([v, l]) => (
+                  <button key={v} type="button" role="radio" aria-checked={choix === v} onClick={() => setChoix(v)}
+                    className={`flex min-h-[44px] items-center gap-2.5 rounded-[12px] px-3 text-left text-[15px] ${choix === v ? 'bg-bleu-pale font-semibold text-bleu-fonce ring-2 ring-bleu' : 'bg-white text-encre shadow-carte'}`}>
+                    <span className={`h-5 w-5 shrink-0 rounded-full border-2 ${choix === v ? 'border-[6px] border-bleu' : 'border-encre-pale'}`} />{l}
+                  </button>
+                ))}
+              </div>
+              {choix === 'partie' && (
+                <div className="mt-2">
+                  <ChampMontant valeur={textePartie} surChange={setTextePartie} devise={devise} libelle="Montant mis de côté" />
+                  {Number.isFinite(epargne) && epargne > libre && <p className="mt-1 text-[12px] text-encre-pale">C’est plus que le non affecté prévu.</p>}
+                </div>
+              )}
+            </div>
+          ) : libre < 0 ? (
+            <p className="pt-1 text-[13px] leading-snug text-rouge">Ta paie ne couvre pas les charges et le budget de cette période : le solde du compte baissera de {formaterMontant(-libre, devise)}. Rien à mettre de côté.</p>
+          ) : (
+            <p className="pt-1 text-[13px] text-encre-douce">Rien de non affecté sur cette période.</p>
+          )}
           {previsions.detailRevenus.some((d) => d.estime) && (
             <p className="text-[12px] leading-snug text-encre-pale">Certains revenus sont estimés (montant habituel) : confirme ta paie pour un calcul exact.</p>
           )}
         </div>
       )}
-      <Bouton className="mt-3" disabled={!Number.isFinite(enveloppe) || !Number.isFinite(epargne)} onClick={() => void valider()}>Valider le budget</Bouton>
+      <Bouton className="mt-3" disabled={!Number.isFinite(enveloppe) || (!premiere && !Number.isFinite(epargne))} onClick={() => void valider()}>Valider le budget</Bouton>
+      {!premiere && aDecider && choix === null && <p className="mt-1.5 text-center text-[12px] text-encre-pale">Choisis d’abord ce que tu fais du non affecté.</p>}
     </section>
   )
 }
