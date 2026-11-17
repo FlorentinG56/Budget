@@ -63,7 +63,7 @@ export function Calendrier() {
       comptes: vue.comptes, aujourdhui, jusquAu: fin,
       soldeFinAujourdhui: comptesVue.reduce((s, c) => s + soldeCompte(c, ctx.operations, aujourdhui), 0),
       enAttenteAujourdhui: echeancesEnAttente(ctx.recurrences, aujourdhui).filter((e) => vue.comptes.has(e.recurrence.compteId)).reduce((s, e) => s + e.recurrence.montant, 0),
-      evenements: evenementsPrevus(ctx.recurrences, lendemain(aujourdhui), fin),
+      evenements: evenementsPrevus(ctx.recurrences, lendemain(aujourdhui), fin, ctx.operations),
       operationsFutures: ctx.operations.filter((o) => o.date > aujourdhui),
       depenseJour,
     })
@@ -169,7 +169,7 @@ export function Calendrier() {
       <DetailJour date={jourChoisi} aujourdhui={aujourdhui} vue={vue} projection={projection.get(jourChoisi)}
         infoPasse={jourChoisi < aujourdhui ? infosPasse(jourChoisi) : undefined}
         operations={ctx.operations.filter((o) => o.date === jourChoisi && (vue.comptes.has(o.compteId) || (!!o.compteDestinationId && vue.comptes.has(o.compteDestinationId))))}
-        prevus={jourChoisi > aujourdhui ? evenementsPrevus(ctx.recurrences, jourChoisi, jourChoisi).filter((e) => vue.comptes.has(e.compteId)) : []}
+        prevus={jourChoisi > aujourdhui ? evenementsPrevus(ctx.recurrences, jourChoisi, jourChoisi, ctx.operations).filter((e) => vue.comptes.has(e.compteId)) : []}
         comptes={mapComptes} surOuvrir={(op) => nav.ouvrir(<EditionOperation id={op.id} />)} categories={mapCats} />
     </Ecran>
   )

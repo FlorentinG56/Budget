@@ -1,5 +1,5 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns'
-import { echeancesEntre, lendemain, veille } from './recurrences'
+import { echeancesAVenir, echeancesEntre, lendemain, veille } from './recurrences'
 import type { AffectationFin, Centimes, Compte, DateISO, Operation, Periode, Recurrence } from './types'
 import { addDays } from 'date-fns'
 import { versISO } from './dates'
@@ -82,8 +82,7 @@ export function previsionsPeriode(recurrences: Recurrence[], operations: Operati
   // à venir
   for (const r of recurrences) {
     if (!r.actif || !budget.has(r.compteId)) continue
-    const depuis = r.derniereEcheanceGeneree && lendemain(r.derniereEcheanceGeneree) > b.debut ? lendemain(r.derniereEcheanceGeneree) : b.debut
-    for (const e of echeancesEntre(r, depuis, b.fin)) ajouter(r.type === 'revenu', r.libelle, r.montant, e, true)
+    for (const e of echeancesAVenir(r, operations, b.debut, b.fin)) ajouter(r.type === 'revenu', r.libelle, r.montant, e, true)
   }
   const tri = (a: { date: string }, z: { date: string }) => a.date.localeCompare(z.date)
   p.detailRevenus.sort(tri); p.detailCharges.sort(tri)

@@ -214,3 +214,29 @@ describe('périodes à venir', () => {
     expect(periodesAVenir(paie, [paie], [], budget, [], '2026-11-01', 1, 50000)[0].bornes.debut).toBe('2026-11-11')
   })
 })
+
+describe('crédits dans les charges de la période', () => {
+  const p = { ...paie, derniereEcheanceGeneree: '2026-11-17' }
+  const auto = rec({ id: 'auto', type: 'credit', libelle: 'Crédit auto', montant: 35000, jours: [28], dateFin: '2027-01-28', derniereEcheanceGeneree: '2026-11-17' })
+  it('le crédit auto est déduit, jusqu’à sa dernière mensualité', () => {
+    const l = periodesAVenir(p, [p, auto], [], budget, [], '2026-11-17', 6, 50000)
+    expect(l.map((x) => [x.bornes.debut, x.previsions.charges])).toEqual([
+      ['2026-11-25', 35000], // 28 nov
+      ['2026-12-09', 0],
+      ['2026-12-23', 35000], // 28 déc
+      ['2027-01-06', 0],
+      ['2027-01-20', 35000], // 28 janv : dernière mensualité
+      ['2027-02-03', 0], // terminé
+    ])
+  })
+  it('s’arrête quand le capital est remboursé, même avant la date de fin', () => {
+    // 700 $ restants à 350 $/mois sans taux : 2 mensualités (28 nov, 28 déc)
+    const presqueFini = { ...auto, dateFin: '2028-12-28', capitalRestantDu: 70000, capitalReferenceDate: '2026-11-17' }
+    const l = periodesAVenir(p, [p, presqueFini], [], budget, [], '2026-11-17', 4, 50000)
+    expect(l.map((x) => x.previsions.charges)).toEqual([35000, 0, 35000, 0])
+  })
+  it('payé par carte : déduit aussi', () => {
+    const parCarte = { ...auto, moyenPaiement: 'carte' as const, carteId: 'cc' }
+    expect(periodesAVenir(p, [p, parCarte], [], budget, [], '2026-11-17', 1, 50000)[0].previsions.charges).toBe(35000)
+  })
+})

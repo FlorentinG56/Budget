@@ -1,6 +1,6 @@
 import { addDays, parseISO } from 'date-fns'
 import { versISO } from './dates'
-import { echeancesEntre, lendemain } from './recurrences'
+import { echeancesAVenir, lendemain } from './recurrences'
 import type { Centimes, DateISO, Operation, Recurrence } from './types'
 import { effetSurCompte } from './soldes'
 
@@ -19,12 +19,10 @@ export interface EvenementPrevu {
 }
 
 /** Échéances à venir (non encore traitées) des récurrences actives, entre deux dates incluses. */
-export function evenementsPrevus(recurrences: Recurrence[], du: DateISO, au: DateISO): EvenementPrevu[] {
+export function evenementsPrevus(recurrences: Recurrence[], du: DateISO, au: DateISO, operations: Operation[] = []): EvenementPrevu[] {
   const liste: EvenementPrevu[] = []
   for (const r of recurrences) {
-    if (!r.actif) continue
-    const depuis = r.derniereEcheanceGeneree && lendemain(r.derniereEcheanceGeneree) > du ? lendemain(r.derniereEcheanceGeneree) : du
-    for (const date of echeancesEntre(r, depuis, au)) {
+    for (const date of echeancesAVenir(r, operations, du, au)) {
       liste.push({
         date, libelle: r.libelle, montant: r.montant, recurrenceId: r.id,
         sens: r.type === 'revenu' ? 'revenu' : 'charge',

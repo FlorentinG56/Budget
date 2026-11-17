@@ -211,3 +211,27 @@ export function echeanceARattacher(recurrences: Recurrence[], compteId: string, 
   // la plus proche de la date de saisie
   return candidates.sort((a, b) => Math.abs(differenceInCalendarDays(parseISO(a.date), d)) - Math.abs(differenceInCalendarDays(parseISO(b.date), d)))[0]
 }
+
+/**
+ * Crédit dont le capital est connu : date de la dernière mensualité réellement due
+ * (le capital peut être remboursé avant la date de fin). Undefined : pas de limite autre que la date de fin.
+ */
+export function finEffectiveCredit(rec: Recurrence, operations: Operation[]): DateISO | undefined {
+  if (rec.type !== 'credit') return undefined
+  const capital = capitalRestant(rec, operations)
+  if (capital === undefined) return undefined
+  const depuis = rec.derniereEcheanceGeneree ? lendemain(rec.derniereEcheanceGeneree) : rec.dateDebut
+  if (capital <= 0) return rec.derniereEcheanceGeneree ?? veille(depuis)
+  const n = simulerNombre(capital, rec.montant, rec.tauxAnnuel)
+  if (!Number.isFinite(n)) return undefined
+  const dates = echeancesEntre(rec, depuis, versISO(addDays(parseISO(depuis), 31 * (n + 1))))
+  return dates[n - 1]
+}
+
+/** Échéances à venir (après la dernière traitée) d'une récurrence active, en tenant compte de la fin d'un crédit. */
+export function echeancesAVenir(rec: Recurrence, operations: Operation[], du: DateISO, au: DateISO): DateISO[] {
+  if (!rec.actif) return []
+  const depuis = rec.derniereEcheanceGeneree && lendemain(rec.derniereEcheanceGeneree) > du ? lendemain(rec.derniereEcheanceGeneree) : du
+  const fin = finEffectiveCredit(rec, operations)
+  return echeancesEntre(rec, depuis, fin && fin < au ? fin : au)
+}
