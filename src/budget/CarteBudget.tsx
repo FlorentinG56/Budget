@@ -61,7 +61,7 @@ export function CarteBudget({ devise }: { devise: Devise }) {
           <div className="mt-3 space-y-2.5">
             <div>
               <p className="mb-1 flex justify-between text-[13px] text-encre-douce">
-                <span>Jour {jour.jourNumero} sur {jour.joursTotal}</span><span>jusqu’au {court(bornes.fin)}</span>
+                <span>Jour {jour.jourNumero} sur {jour.joursTotal} · {jour.joursRestants === 1 ? 'dernier jour' : `${jour.joursRestants} jours restants`}</span><span>jusqu’au {court(bornes.fin)}</span>
               </p>
               <Barre valeur={jour.jourNumero / jour.joursTotal} couleur="bg-encre-pale/60" />
             </div>
