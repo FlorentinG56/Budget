@@ -10,6 +10,7 @@ import type { Devise } from '../domain/types'
 import { useBudget } from '../hooks/budget'
 import { Page } from '../nav/Navigation'
 import { ChampMontant, lireMontant, versTexteMontant } from './ChampMontant'
+import { Projection } from './CarteBudget'
 
 const court = (d: string) => libelleCourt(d).replace(/ \d{4}$/, '')
 const AFFECTATION = { epargne: 'mis en épargne', report: 'reporté', deficit_reporte: 'retiré de la suivante', aucune: '' }
@@ -47,6 +48,7 @@ export function PagePeriode() {
           <p className="flex justify-between"><span className="text-encre-douce">Dépensé</span><span className="font-semibold">{formaterMontant(jour.depensePeriode, devise)}</span></p>
           <p className="flex justify-between"><span className="text-encre-douce">Reste pour {jour.joursRestants} jour{jour.joursRestants > 1 ? 's' : ''}</span>
             <span className={`font-semibold ${jour.restePeriode < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(jour.restePeriode, devise)}</span></p>
+          <Projection jour={jour} devise={devise} />
         </div>
       </Groupe>
 

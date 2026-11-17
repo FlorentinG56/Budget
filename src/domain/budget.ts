@@ -120,6 +120,8 @@ export interface BudgetJour {
   depensePeriode: Centimes
   restePeriode: Centimes // enveloppe − toutes les dépenses de la période
   joursRestants: number
+  /** Projection : budget par jour des jours suivants si l'on ne dépense plus rien aujourd'hui (absent le dernier jour). */
+  budgetJoursSuivants?: Centimes
   jourNumero: number
   joursTotal: number
 }
@@ -141,6 +143,7 @@ export function calculerBudgetJour(enveloppe: Centimes, operations: Operation[],
     depensePeriode,
     restePeriode: enveloppe - depensePeriode,
     joursRestants: n,
+    budgetJoursSuivants: n > 1 ? Math.round((enveloppe - avant - aujourdhui) / (n - 1)) : undefined,
     jourNumero: joursDansPeriode({ debut: b.debut, fin: date }),
     joursTotal: joursDansPeriode(b),
   }
