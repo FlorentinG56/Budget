@@ -1,16 +1,4 @@
-import type { Categorie, Compte, DateISO } from '../domain/types'
-
-/** Comptes de départ (cahier des charges, « Comptes bancaires »). Soldes à 0 : l'utilisateur les renseigne. */
-export function comptesInitiaux(date: DateISO): Compte[] {
-  const base = { soldeDepart: 0, dateDepart: date, archive: false }
-  return [
-    { ...base, id: 'chq', nom: 'Compte courant', type: 'cheque', devise: 'CAD', couleur: '#00874E', inclusBudgetJournalier: true, ordre: 0 },
-    { ...base, id: 'carte', nom: 'Carte de crédit', type: 'carte_credit', devise: 'CAD', couleur: '#2E9C6A', compteRemboursementId: 'chq', inclusBudgetJournalier: true, ordre: 1 },
-    { ...base, id: 'eur', nom: 'Compte en euros', type: 'cheque', devise: 'EUR', couleur: '#008C8C', inclusBudgetJournalier: false, ordre: 2 },
-    { ...base, id: 'voyage', nom: 'Compte voyage', type: 'cheque', devise: 'EUR', couleur: '#3D4A5C', inclusBudgetJournalier: false, ordre: 3 },
-    { ...base, id: 'activite', nom: 'Compte secondaire', type: 'cheque', devise: 'EUR', couleur: '#7A5AF8', inclusBudgetJournalier: false, ordre: 4 },
-  ]
-}
+import type { Categorie } from '../domain/types'
 
 const CATEGORIES: [string, string, string, string[]][] = [
   ['Alimentation', '🛒', '#F59E0B', ['Épicerie', 'Restaurant', 'Café/boulangerie', 'Fast-food/livraison']],
@@ -31,7 +19,7 @@ function identifiant(nom: string): string {
   return nom.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
-/** Catégories validées, avec identifiants stables (ex. « alimentation », « alimentation/epicerie »). */
+/** Catégories proposées à un nouvel utilisateur (modifiables ensuite), avec identifiants stables (ex. « alimentation », « alimentation/epicerie »). Aucun compte n'est créé d'office : le parcours d'accueil s'en charge. */
 export function categoriesInitiales(): Categorie[] {
   const liste: Categorie[] = []
   CATEGORIES.forEach(([nom, icone, couleur, sous], i) => {

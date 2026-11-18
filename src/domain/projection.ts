@@ -42,7 +42,7 @@ export interface JourProjete {
 }
 
 export interface ParamsProjection {
-  comptes: Set<string> // comptes additionnés (ex. compte courant + carte)
+  comptes: Set<string> // comptes additionnés (ex. compte du budget du jour + sa carte)
   aujourdhui: DateISO
   jusquAu: DateISO
   soldeFinAujourdhui: Centimes // solde réel, opérations du jour comprises

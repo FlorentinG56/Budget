@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { capitalRestant } from '../domain/recurrences'
 import { aujourdhui } from '../domain/dates'
 import { soldeCompte } from '../domain/soldes'
-import { confirmerEcheance, enregistrerRecurrence, genererEcheances, initialiserDonnees, supprimerOperation } from './actions'
+import {confirmerEcheance, enregistrerRecurrence, genererEcheances, supprimerOperation } from './actions'
+import { preparerUtilisateur } from './testUtils'
 import { echeancesEnAttente } from '../domain/recurrences'
 import { BudgetDB } from './db'
 
@@ -12,7 +13,7 @@ const base0 = { compteId: 'chq', moyenPaiement: 'compte' as const, actif: true, 
 describe('prélèvements automatiques', () => {
   it('ne génère pas les échéances antérieures à la création, puis rattrape', async () => {
     const base = new BudgetDB('test-rec-1')
-    await initialiserDonnees(base)
+    await preparerUtilisateur(base)
     const r = await enregistrerRecurrence({ ...base0, type: 'charge_fixe', libelle: 'Loyer', montant: 120000, dateDebut: '2026-01-01', categorieId: 'logement' }, base)
     expect(r.derniereEcheanceGeneree).toBe(aujourdhui())
     // simulation : l'app n'est pas ouverte pendant 3 mois
@@ -26,7 +27,7 @@ describe('prélèvements automatiques', () => {
 
   it('une échéance annulée (supprimée) n’est pas recréée', async () => {
     const base = new BudgetDB('test-rec-2')
-    await initialiserDonnees(base)
+    await preparerUtilisateur(base)
     const r = await enregistrerRecurrence({ ...base0, type: 'charge_fixe', libelle: 'Internet', montant: 8000, dateDebut: '2026-01-01' }, base)
     await base.recurrences.update(r.id, { derniereEcheanceGeneree: '2026-09-15' })
     const [op] = await genererEcheances('2026-10-05', base)
@@ -37,7 +38,7 @@ describe('prélèvements automatiques', () => {
 
   it('un revenu crédite le compte ; une charge par carte augmente le dû', async () => {
     const base = new BudgetDB('test-rec-3')
-    await initialiserDonnees(base)
+    await preparerUtilisateur(base)
     const paie = await enregistrerRecurrence({ ...base0, type: 'revenu', libelle: 'Salaire', montant: 180000, frequence: '14_jours', jours: [], dateDebut: '2026-11-11' }, base)
     const abo = await enregistrerRecurrence({ ...base0, type: 'charge_fixe', libelle: 'Netflix', montant: 2000, jours: [20], dateDebut: '2026-01-01', moyenPaiement: 'carte', carteId: 'carte' }, base)
     await base.recurrences.update(paie.id, { derniereEcheanceGeneree: '2026-11-11' })
@@ -53,7 +54,7 @@ describe('prélèvements automatiques', () => {
 
   it('crédit : le capital baisse à chaque mensualité et remonte si on annule', async () => {
     const base = new BudgetDB('test-rec-4')
-    await initialiserDonnees(base)
+    await preparerUtilisateur(base)
     const c = await enregistrerRecurrence({ ...base0, type: 'credit', libelle: 'Auto', montant: 35000, jours: [15], dateDebut: '2026-01-15', capitalRestantDu: 840000, tauxAnnuel: 6 }, base)
     expect(c.capitalInitial).toBe(840000)
     const ref = c.capitalReferenceDate!
@@ -72,7 +73,7 @@ describe('prélèvements automatiques', () => {
 
   it('réactiver une récurrence en pause ne rattrape pas la pause', async () => {
     const base = new BudgetDB('test-rec-5')
-    await initialiserDonnees(base)
+    await preparerUtilisateur(base)
     const r = await enregistrerRecurrence({ ...base0, type: 'charge_fixe', libelle: 'Gym', montant: 5000, dateDebut: '2026-01-01' }, base)
     await base.recurrences.update(r.id, { derniereEcheanceGeneree: '2026-03-01', actif: false })
     await enregistrerRecurrence({ ...(await base.recurrences.get(r.id))!, actif: true }, base)
@@ -84,7 +85,7 @@ describe('prélèvements automatiques', () => {
 describe('paie à confirmer', () => {
   it('confirmer crée le revenu avec le montant réel ; ignorer ne crée rien', async () => {
     const base = new BudgetDB('test-confirmer')
-    await initialiserDonnees(base)
+    await preparerUtilisateur(base)
     const r = await enregistrerRecurrence({ ...base0, type: 'revenu', libelle: 'Salaire', montant: 180000, frequence: '14_jours', jours: [], dateDebut: '2026-11-11', aConfirmer: true }, base)
     await base.recurrences.update(r.id, { derniereEcheanceGeneree: '2026-11-15' })
     expect(await genererEcheances('2026-12-10', base)).toEqual([])

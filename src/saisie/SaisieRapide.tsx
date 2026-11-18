@@ -90,7 +90,7 @@ export function SaisieRapide({ surFermer }: { surFermer: () => void }) {
   }
 
   const puce = 'relative flex min-h-[34px] shrink-0 items-center gap-1 rounded-full bg-white px-2.5 text-[14px] font-medium text-encre shadow-carte'
-  // « Compte courant » → « Banque » (le nom complet reste dans la liste de choix)
+  // « Banque – compte chèque » → « Banque » (le nom complet reste dans la liste de choix)
   const nomCourt = (compte?.nom ?? '').split(' – ')[0]
 
   return (

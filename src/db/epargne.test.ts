@@ -1,13 +1,14 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
 import { soldeObjectif } from '../domain/epargne'
-import { ajouterMouvement, cloturerPeriode, enregistrerOperation, initialiserDonnees, synchroniserSecurite, validerPeriode } from './actions'
+import {ajouterMouvement, cloturerPeriode, enregistrerOperation, synchroniserSecurite, validerPeriode } from './actions'
+import { preparerUtilisateur } from './testUtils'
 import { BudgetDB, lireReglages } from './db'
 
 describe('objectif Sécurité', () => {
   it('reprend l’épargne de la paie et le reste des périodes, sans doublon', async () => {
     const base = new BudgetDB('test-securite')
-    await initialiserDonnees(base)
+    await preparerUtilisateur(base)
     // données d'avant l'étape 7 : période close avec reste en épargne, nouvelle période avec épargne à la paie
     await base.periodes.bulkAdd([
       { id: 'p-2026-11-11', dateDebut: '2026-11-11', dateFin: '2026-11-24', enveloppeValidee: 53000, epargneMiseDeCote: 0, reportPrecedent: 0, ajouts: [], cloturee: true, affectationFin: 'epargne', montantAffecte: 47750 },

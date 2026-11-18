@@ -3,18 +3,44 @@ import { montantAjustement, soldeCompte } from '../domain/soldes'
 import { genererOperations } from '../domain/recurrences'
 import type { AffectationFin, Categorie, Centimes, Compte, MouvementEpargne, ObjectifEpargne, Operation, Periode, Recurrence } from '../domain/types'
 import { db, lireReglages, modifierReglages, type BudgetDB } from './db'
-import { categoriesInitiales, comptesInitiaux } from './donneesInitiales'
+import { categoriesInitiales } from './donneesInitiales'
 
 export const nouvelId = () => crypto.randomUUID()
 
-/** Crée les comptes et catégories de départ, une seule fois. */
-export async function initialiserDonnees(base: BudgetDB = db): Promise<void> {
-  await base.transaction('rw', base.comptes, base.categories, base.reglages, async () => {
+/**
+ * Premier lancement. Pour un nouvel utilisateur (aucun compte, données jamais initialisées) : crée les catégories
+ * proposées et ouvre le parcours d'accueil. Pour un utilisateur existant (des comptes, ou données déjà initialisées) :
+ * ne crée, ne renomme et ne supprime rien.
+ */
+export async function initialiserDonnees(base: BudgetDB = db): Promise<'nouveau' | 'existant'> {
+  return base.transaction('rw', base.comptes, base.categories, base.reglages, async () => {
     const r = await lireReglages(base)
-    if (r.donneesInitialisees) return
-    if ((await base.comptes.count()) === 0) await base.comptes.bulkAdd(comptesInitiaux(aujourdhui()))
+    if (r.parcoursAccueil === 'en_cours') return 'nouveau' // parcours commencé puis interrompu : on le reprend
+    if (r.donneesInitialisees || (await base.comptes.count()) > 0) return 'existant'
     if ((await base.categories.count()) === 0) await base.categories.bulkAdd(categoriesInitiales())
-    await modifierReglages({ donneesInitialisees: true }, base)
+    await modifierReglages({ parcoursAccueil: 'en_cours' }, base)
+    return 'nouveau'
+  })
+}
+
+/** Fin du parcours d'accueil. */
+export async function terminerAccueil(base: BudgetDB = db): Promise<void> {
+  await modifierReglages({ parcoursAccueil: 'termine', donneesInitialisees: true, soldesDepartSaisis: true }, base)
+}
+
+/**
+ * Compte du budget du jour (et sa carte de crédit éventuelle) : seuls ceux-là comptent dans le budget journalier,
+ * et la carte est remboursée depuis ce compte.
+ */
+export async function choisirComptesBudget(compteId: string, carteId: string | null, base: BudgetDB = db): Promise<void> {
+  await base.transaction('rw', base.comptes, async () => {
+    for (const c of await base.comptes.toArray()) {
+      const inclus = c.id === compteId || c.id === carteId
+      await base.comptes.update(c.id, {
+        inclusBudgetJournalier: inclus,
+        ...(c.id === carteId ? { compteRemboursementId: compteId } : {}),
+      })
+    }
   })
 }
 

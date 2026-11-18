@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 're
 import { BarreOnglets, type Onglet } from './components/BarreOnglets'
 import { Feuille } from './components/Feuille'
 import { EcheancesCtx } from './components/BandeauEcheances'
-import { genererEcheances, initialiserDonnees, synchroniserSecurite } from './db/actions'
+import { genererEcheances, initialiserDonnees, synchroniserSecurite, terminerAccueil } from './db/actions'
+import { ParcoursAccueil } from './accueil/ParcoursAccueil'
 import type { Operation } from './domain/types'
 import { NavCtx, type Nav } from './nav/Navigation'
 import { SaisieRapide } from './saisie/SaisieRapide'
@@ -39,6 +40,7 @@ export default function App() {
   const [numeroSaisie, setNumeroSaisie] = useState(0) // remet la saisie à zéro à chaque ouverture
   const [pile, setPile] = useState<ReactNode[]>([])
   const [pret, setPret] = useState(false)
+  const [accueil, setAccueil] = useState(false) // parcours d'accueil d'un nouvel utilisateur
 
   const nav = useMemo<Nav>(() => ({
     ouvrir: (page) => { setPile((p) => [...p, page]); window.scrollTo(0, 0) },
@@ -52,7 +54,10 @@ export default function App() {
   useEffect(() => {
     if (etat !== 'deverrouille') return
     const traiter = async () => {
-      if (!pret) { await initialiserDonnees(); await synchroniserSecurite() }
+      if (!pret) {
+        if ((await initialiserDonnees()) === 'nouveau') { setAccueil(true); setPret(true); return }
+        await synchroniserSecurite()
+      }
       const creees = await genererEcheances()
       if (creees.length) setRecentes((r) => [...r, ...creees])
       setPret(true)
@@ -76,6 +81,7 @@ export default function App() {
   if (etat === 'creation') return <EcranCreationCode />
   if (etat === 'verrouille') return <EcranDeverrouillage />
   if (!pret) return <div className="h-full bg-fond" />
+  if (accueil) return <ParcoursAccueil surTermine={async () => { await terminerAccueil(); await synchroniserSecurite(); setAccueil(false) }} />
 
   const Ecran = ECRANS[onglet]
   return (

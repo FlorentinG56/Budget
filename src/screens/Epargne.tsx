@@ -37,8 +37,8 @@ export function Epargne() {
     .sort((a, b) => (a.id === reglages.objectifSecuriteId ? -1 : b.id === reglages.objectifSecuriteId ? 1 : a.nom.localeCompare(b.nom)))
   const archives = objectifs.filter((o) => o.archive)
   const totaux = totalParDevise(objectifs, operations, comptes)
-  const ca = comptes.find((c) => c.id === 'eur' && !c.archive)
-  const proposerFrance = ca && !objectifs.some((o) => o.compteId === ca.id)
+  // tant qu'il n'y a pas d'autre objectif que Sécurité : proposer d'enregistrer l'épargne déjà présente
+  const proposerEpargneExistante = !objectifs.some((o) => o.id !== reglages.objectifSecuriteId)
 
   const ligne = (o: ObjectifEpargne) => {
     const compte = mapComptes.get(o.compteId)!
@@ -74,7 +74,7 @@ export function Epargne() {
         <p className="mt-1 text-[13px] leading-snug text-encre-pale">L’épargne est virtuelle : elle réserve une partie du solde de chaque compte, l’argent ne bouge pas.</p>
       </section>
 
-      {proposerFrance && <ProposerEpargneFrance compte={ca!} />}
+      {proposerEpargneExistante && <ProposerEpargneExistante comptes={comptes.filter((c) => c.type !== 'carte_credit')} />}
 
       {actifs.length > 0 && <Groupe>{actifs.map(ligne)}</Groupe>}
 
@@ -111,19 +111,34 @@ function SoldesDisponibles({ comptes, objectifs }: { comptes: Compte[]; objectif
   )
 }
 
-function ProposerEpargneFrance({ compte }: { compte: Compte }) {
+function ProposerEpargneExistante({ comptes }: { comptes: Compte[] }) {
+  const [compteId, setCompteId] = useState(comptes[0]?.id ?? '')
+  const [nom, setNom] = useState('Épargne')
   const [texte, setTexte] = useState('')
   const montant = lireMontant(texte)
+  const compte = comptes.find((c) => c.id === compteId)
+  if (!compte) return null
   return (
     <section className="rounded-carte border border-bleu/20 bg-bleu-pale p-4">
-      <p className="text-[16px] font-semibold text-bleu-fonce">💰 Ton épargne sur le Compte en euros</p>
-      <p className="mt-1 text-[14px] leading-snug text-encre-douce">Combien de ton solde Compte en euros est de l’épargne ? Elle sera enregistrée dans un objectif « Épargne ».</p>
-      <div className="mt-2 flex gap-2">
-        <div className="flex-1"><ChampMontant valeur={texte} surChange={setTexte} devise={compte.devise} libelle="Épargne déjà présente" /></div>
-        <Bouton className="!w-auto" disabled={montant === null} onClick={async () => {
-          const o = await enregistrerObjectif({ nom: 'Épargne', compteId: compte.id })
-          if (montant) await ajouterMouvement(o.id, { date: aujourdhui(), montant, sens: 'mise_de_cote', note: 'Épargne déjà présente' })
-        }}>Créer</Bouton>
+      <p className="text-[16px] font-semibold text-bleu-fonce">💰 Tu as déjà de l’épargne sur un compte ?</p>
+      <p className="mt-1 text-[14px] leading-snug text-encre-douce">Indique quelle part du solde est de l’épargne : elle sera enregistrée dans un objectif, et retirée de ton disponible.</p>
+      <div className="mt-2 flex flex-col gap-2">
+        <label className="relative flex min-h-[46px] items-center justify-between rounded-[12px] bg-white px-3 text-[16px] shadow-carte">
+          <span className="text-encre-douce">Compte</span>
+          <span className="max-w-[60%] truncate font-medium text-encre">{compte.nom}</span>
+          <select value={compteId} onChange={(e) => setCompteId(e.target.value)} className="absolute inset-0 opacity-0" aria-label="Compte de l’épargne déjà présente">
+            {comptes.map((c) => <option key={c.id} value={c.id}>{c.nom} ({c.devise})</option>)}
+          </select>
+        </label>
+        <input value={nom} onChange={(e) => setNom(e.target.value)} aria-label="Nom de l’objectif" placeholder="Nom de l’objectif"
+          className="min-h-[46px] rounded-[12px] bg-white px-3 text-[16px] shadow-carte outline-none placeholder:text-encre-pale" />
+        <div className="flex gap-2">
+          <div className="flex-1"><ChampMontant valeur={texte} surChange={setTexte} devise={compte.devise} libelle="Épargne déjà présente" /></div>
+          <Bouton className="!w-auto" disabled={!montant || !nom.trim()} onClick={async () => {
+            const o = await enregistrerObjectif({ nom: nom.trim(), compteId: compte.id })
+            if (montant) await ajouterMouvement(o.id, { date: aujourdhui(), montant, sens: 'mise_de_cote', note: 'Épargne déjà présente' })
+          }}>Créer</Bouton>
+        </div>
       </div>
     </section>
   )

@@ -14,7 +14,7 @@ export interface Bornes {
   fin: DateISO // incluse : veille de la paie suivante
 }
 
-/** Comptes qui comptent dans le budget du jour : compte courant et sa carte. */
+/** Comptes qui comptent dans le budget du jour : le compte choisi et sa carte de crédit éventuelle. */
 export function comptesBudget(comptes: Compte[]): Set<string> {
   return new Set(comptes.filter((c) => c.inclusBudgetJournalier && !c.archive).map((c) => c.id))
 }

@@ -148,9 +148,10 @@ export interface Reglages {
   soldesDepartSaisis: boolean // l'utilisateur a renseigné ses soldes de départ
   dernierMoyenPaiement: 'debit' | 'carte'
   recurrencePaieId?: string // revenu récurrent qui ouvre chaque période du budget
-  budgetParPeriode: Centimes // enveloppe fixe proposée à chaque paie (choisi par l’utilisateur)
+  budgetParPeriode: Centimes // enveloppe fixe proposée à chaque paie (choisie au parcours d'accueil)
   objectifSecuriteId?: string // objectif qui reçoit l'épargne de la paie et le reste des périodes
   rappelSauvegardeJours: number // « Dernière sauvegarde il y a X jours » au-delà de ce délai
+  parcoursAccueil?: 'en_cours' | 'termine' // premier lancement d'un nouvel utilisateur
 }
 
 export const REGLAGES_PAR_DEFAUT: Reglages = {
@@ -164,6 +165,6 @@ export const REGLAGES_PAR_DEFAUT: Reglages = {
   donneesInitialisees: false,
   soldesDepartSaisis: false,
   dernierMoyenPaiement: 'debit',
-  budgetParPeriode: 50000,
+  budgetParPeriode: 0,
   rappelSauvegardeJours: 14,
 }

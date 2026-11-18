@@ -3,7 +3,7 @@ import { effetSurCompte, montantAjustement, montantDuCarte, soldeCompte } from '
 import type { Compte, Operation } from './types'
 
 const compte = (p: Partial<Compte>): Compte => ({
-  id: 'chq', nom: 'Banque', type: 'cheque', devise: 'CAD', couleur: '#000', soldeDepart: 100000,
+  id: 'chq', nom: 'Compte courant', type: 'cheque', devise: 'CAD', couleur: '#000', soldeDepart: 100000,
   dateDepart: '2026-11-01', inclusBudgetJournalier: true, archive: false, ordre: 0, ...p,
 })
 let n = 0

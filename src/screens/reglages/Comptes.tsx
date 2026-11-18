@@ -127,7 +127,7 @@ export function EditionCompte({ id }: { id?: string }) {
       )}
 
       <Groupe>
-        <Champ libelle="Nom"><Saisie value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Ex. Banque" /></Champ>
+        <Champ libelle="Nom"><Saisie value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Ex. Compte courant" /></Champ>
         <Champ libelle="Type">
           {existant ? <span className="text-[17px] text-encre-douce">{LIBELLE_TYPE[type]}</span> : (
             <Choix value={type} onChange={(e) => setType(e.target.value as TypeCompte)}>

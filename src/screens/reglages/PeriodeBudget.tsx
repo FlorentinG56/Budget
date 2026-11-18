@@ -55,7 +55,7 @@ export function PeriodeBudget() {
         </Bouton>
       )}
       <p className="px-1 text-[13px] leading-snug text-encre-pale">
-        Comptent dans le budget du jour : les dépenses sur le compte courant et sur la carte. Les charges fixes sont déjà retirées de l’enveloppe ;
+        Comptent dans le budget du jour : les dépenses sur {ctx.comptes.filter((c) => ctx.budget.has(c.id)).map((c) => c.nom).join(' et ') || 'le compte du budget du jour'}. Les charges fixes sont déjà retirées de l’enveloppe ;
         les remboursements de carte, virements et ajustements ne comptent pas.
       </p>
     </Page>
