@@ -60,5 +60,6 @@ Complète le cahier des charges. Formulées de façon générale : aucune donné
 | Imprévu payé avec l'épargne | Vraie dépense (solde, catégories), retirée de l'objectif, hors budget du jour |
 | Disponible réel | Solde − épargne réservée |
 | Calendrier | Vue du compte du budget = compte + carte additionnés. Projection : reste du budget du jour, budget des jours suivants et reste « à côté » jusqu'à la fin de la période, puis budget par période réparti sur les jours des périodes futures |
+| Cases du calendrier | Montants en 12 px gras, contraste ≥ 4,5:1 (vert et rouge foncés). Passé : fond blanc, dépensé (vert si budget du jour respecté, rouge sinon). Futur : fond bleu très pâle, solde projeté ; rouge pâle si négatif. Aujourd'hui : pastille bleue |
 | Bandeaux d'alerte | Budget du jour dépassé, solde projeté négatif, charges à venir (délai réglable), fin d'un crédit, rappel de sauvegarde. Masquables jusqu'au lendemain |
 | Analyses | Semaine, période de paie, mois, compte par compte. Charges fixes exclues des catégories par défaut. Toutes les dépenses figurent dans les catégories, quel que soit leur financement |

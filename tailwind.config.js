@@ -5,9 +5,9 @@ export default {
     extend: {
       colors: {
         fond: '#F2F4F7',
-        bleu: { DEFAULT: '#2F6FED', fonce: '#1F55C4', pale: '#E6EEFD' },
-        vert: { DEFAULT: '#1F9D63', pale: '#E3F5EC' },
-        rouge: { DEFAULT: '#E0524D', pale: '#FCEAEA' },
+        bleu: { DEFAULT: '#2F6FED', fonce: '#1F55C4', pale: '#E6EEFD', trespale: '#F0F5FE' },
+        vert: { DEFAULT: '#1F9D63', pale: '#E3F5EC', fonce: '#15803D' },
+        rouge: { DEFAULT: '#E0524D', pale: '#FCEAEA', fonce: '#B42318' },
         encre: { DEFAULT: '#1A2233', douce: '#5B6475', pale: '#98A0AE' },
         trait: '#E3E7ED',
       },

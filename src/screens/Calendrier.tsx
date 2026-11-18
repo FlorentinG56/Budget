@@ -9,6 +9,7 @@ import { budgetDuJourA, depensesBudget, enveloppeEffective } from '../domain/bud
 import { libelleJour } from '../domain/dates'
 import { evenementsPrevus, grilleMois, montantCompact, premierJourNegatif, type JourProjete } from '../domain/projection'
 import { soldeCompte } from '../domain/soldes'
+import { apparenceCase } from '../domain/calendrier'
 import type { Compte, DateISO, Devise, Operation } from '../domain/types'
 import { useContexteBudget } from '../hooks/budget'
 import { calculerProjection } from '../hooks/projection'
@@ -116,11 +117,13 @@ export function Calendrier() {
             const proj = projection.get(d)
             const evs = futur ? { r: (proj?.revenus ?? 0) > 0, c: (proj?.charges ?? 0) > 0 } : pointsReels(ctx.operations, vue.comptes, d)
             const info = passe ? infosPasse(d) : undefined
-            const rouge = !passe && proj && proj.solde < 0
+            const a = apparenceCase({ date: d, aujourdhui, depense: info?.depense, budgetJour: info?.budget, soldeProjete: proj?.solde })
             const choisi = d === jourChoisi
+            const fond = { passe: 'bg-white', aujourdhui: 'bg-white', futur: 'bg-bleu-trespale', negatif: 'bg-rouge-pale' }[a.fond]
+            const ton = { respecte: 'text-vert-fonce', depasse: 'text-rouge-fonce', neutre: 'text-encre-douce', projete: 'text-encre-douce', negatif: 'text-rouge-fonce' }[a.ton]
             return (
               <button key={d} type="button" onClick={() => setSelection(d)} aria-label={libelleJour(d, aujourdhui)} aria-pressed={choisi}
-                className={`flex h-[58px] flex-col items-center rounded-[10px] pt-1 transition ${choisi ? 'bg-bleu-pale ring-2 ring-bleu' : rouge ? 'bg-rouge-pale' : 'active:bg-fond'}`}>
+                className={`flex h-[60px] flex-col items-center rounded-[10px] pt-1 transition ${choisi ? 'bg-bleu-pale ring-2 ring-bleu' : `${fond} active:brightness-95`}`}>
                 <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[14px] ${d === aujourdhui ? 'bg-bleu font-bold text-white' : passe ? 'text-encre-douce' : 'text-encre'}`}>
                   {Number(d.slice(8))}
                 </span>
@@ -128,21 +131,21 @@ export function Calendrier() {
                   {evs.c && <span className="h-1.5 w-1.5 rounded-full bg-rouge" />}
                   {evs.r && <span className="h-1.5 w-1.5 rounded-full bg-vert" />}
                 </span>
-                <span className={`text-[10.5px] font-medium leading-tight ${
-                  info ? (info.budget === undefined ? 'text-encre-douce' : info.depense <= info.budget ? 'text-vert' : 'text-rouge')
-                  : rouge ? 'text-rouge' : 'text-encre-pale'}`}>
-                  {info ? (info.depense > 0 || info.budget !== undefined ? montantCompact(info.depense) : '') : proj ? montantCompact(proj.solde) : ''}
+                <span className={`text-[12px] font-semibold leading-tight tabular-nums ${ton}`}>
+                  {a.montant !== undefined ? montantCompact(a.montant) : ''}
                 </span>
               </button>
             )
           })}
         </div>
-        <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 px-1 text-[11.5px] text-encre-pale">
-          <span><span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-rouge align-middle" />charge</span>
-          <span><span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-vert align-middle" />revenu</span>
-          <span>passé : dépensé{vue.budget ? ' (vert = budget respecté)' : ''}</span>
-          <span>à venir : solde projeté</span>
-        </p>
+        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 px-1 text-[12px] text-encre-douce">
+          <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 shrink-0 rounded-[4px] border border-trait bg-white" />Passé : dépensé</span>
+          <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 shrink-0 rounded-[4px] bg-bleu-trespale ring-1 ring-trait" />À venir : solde projeté</span>
+          {vue.budget && <span className="flex items-center gap-1.5"><b className="text-vert-fonce">12</b> budget du jour respecté</span>}
+          {vue.budget && <span className="flex items-center gap-1.5"><b className="text-rouge-fonce">48</b> budget du jour dépassé</span>}
+          <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 shrink-0 rounded-[4px] bg-rouge-pale" />Solde projeté négatif</span>
+          <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-rouge" /> charge <span className="ml-1 h-1.5 w-1.5 rounded-full bg-vert" /> revenu</span>
+        </div>
       </section>
 
       <DetailJour date={jourChoisi} aujourdhui={aujourdhui} vue={vue} projection={projection.get(jourChoisi)}
