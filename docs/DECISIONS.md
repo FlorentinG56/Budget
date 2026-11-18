@@ -12,6 +12,7 @@ Complète le cahier des charges. Formulées de façon générale : aucune donné
 | Montants | Stockés en centimes. Seul l'ajustement de solde est signé ; les autres opérations ont un montant positif, le type donne le sens |
 | Carte de crédit | Gérée comme un compte au solde négatif : montant dû = −solde |
 | Saisie d'historique (dépenses passées) | Abandonnée |
+| Confidentialité du dépôt | Dépôt public. Documentation sans détail personnel ; historique Git réécrit pour retirer ces détails de toutes les anciennes versions |
 
 ## Sécurité
 
