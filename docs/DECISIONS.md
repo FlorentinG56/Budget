@@ -13,6 +13,7 @@ Complète le cahier des charges. Formulées de façon générale : aucune donné
 | Carte de crédit | Gérée comme un compte au solde négatif : montant dû = −solde |
 | Saisie d'historique (dépenses passées) | Abandonnée |
 | Confidentialité du dépôt | Dépôt public. Documentation sans détail personnel ; historique Git réécrit pour retirer ces détails de toutes les anciennes versions |
+| Code | Plus d'option « étape » (reste du développement par étapes). `heureRappel` conservé pour le rappel du soir. Saisie rapide et écran des charges découpés en composants, sans changement de comportement |
 
 ## Sécurité
 

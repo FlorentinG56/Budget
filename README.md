@@ -44,7 +44,10 @@ src/
   hooks/       lectures réactives, état du budget, projection du solde
   lock/        écrans de création / saisie du code, contexte de verrouillage
   components/  barre d'onglets, bouton +, panneaux, cartes
+  saisie/      saisie rapide : orchestration, modes (dépense, revenu, virement), confirmation
+  accueil/     parcours d'accueil d'un nouvel utilisateur
   screens/     Accueil, Calendrier, Analyses, Épargne, Réglages
+               (reglages/recurrences/ : liste, formulaire, filtres et infos crédit des charges et revenus)
 ```
 
 Règle : tout calcul (soldes, montant dû carte, enveloppe, budget du jour, projection, capital restant) vit dans `src/domain/` sous forme de fonction pure, avec ses tests à côté (`*.test.ts`).

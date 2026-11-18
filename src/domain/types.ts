@@ -135,7 +135,7 @@ export interface Reglages {
   id: 'app'
   dureePeriodeJours: number
   delaiAlerteJours: number
-  heureRappel: string // 'HH:mm'
+  heureRappel: string // 'HH:mm' : heure du rappel du soir (notification)
   pinHash?: string // base64
   pinSel?: string // base64
   pinIterations?: number

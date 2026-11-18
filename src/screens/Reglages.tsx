@@ -23,12 +23,12 @@ function Groupe({ children }: { children: ReactNode }) {
   return <div className="divide-y divide-trait overflow-hidden rounded-carte bg-white shadow-carte">{children}</div>
 }
 
-function Ligne({ libelle, valeur, surClic, etape, danger }: { libelle: string; valeur?: ReactNode; surClic?: () => void; etape?: number; danger?: boolean }) {
+function Ligne({ libelle, valeur, surClic, danger }: { libelle: string; valeur?: ReactNode; surClic?: () => void; danger?: boolean }) {
   const contenu = (
     <>
-      <span className={`text-[17px] ${danger ? 'text-rouge' : etape ? 'text-encre-pale' : 'text-encre'}`}>{libelle}</span>
+      <span className={`text-[17px] ${danger ? 'text-rouge' : 'text-encre'}`}>{libelle}</span>
       <span className="flex items-center gap-1.5 text-[15px] text-encre-douce">
-        {etape ? <span className="rounded-full bg-fond px-2 py-0.5 text-[12px] font-semibold text-encre-pale">Étape {etape}</span> : valeur}
+        {valeur}
         {surClic && <IconeChevron taille={18} className="text-encre-pale" />}
       </span>
     </>
