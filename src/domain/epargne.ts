@@ -1,4 +1,5 @@
-import { differenceInCalendarMonths, parseISO } from 'date-fns'
+import { addMonths, differenceInCalendarMonths, parseISO, subMonths } from 'date-fns'
+import { versISO } from './dates'
 import type { Centimes, Compte, DateISO, Devise, ObjectifEpargne, Operation } from './types'
 
 /**
@@ -65,4 +66,50 @@ export function historiqueObjectif(o: ObjectifEpargne, operations: Operation[]):
     })),
   ]
   return lignes.sort((a, b) => b.date.localeCompare(a.date))
+}
+
+// ---------- Projection d'un objectif ----------
+
+export type Rythme =
+  | { etat: 'sans_cible' }
+  | { etat: 'atteint' }
+  | { etat: 'sans_rythme' } // aucune mise de côté sur les 3 derniers mois
+  | { etat: 'projete'; parMois: Centimes; atteintLe: DateISO }
+
+/**
+ * « À ce rythme, atteint en juin 2027 » : moyenne mensuelle des mises de côté des 3 derniers mois
+ * (reprises non déduites), appliquée à ce qui manque pour atteindre la cible.
+ */
+export function rythmeObjectif(o: ObjectifEpargne, solde: Centimes, aujourdhui: DateISO): Rythme {
+  if (!o.montantCible) return { etat: 'sans_cible' }
+  if (solde >= o.montantCible) return { etat: 'atteint' }
+  const debut = versISO(subMonths(parseISO(aujourdhui), 3))
+  const misDeCote = o.mouvements.filter((m) => m.sens === 'mise_de_cote' && m.date > debut && m.date <= aujourdhui).reduce((s, m) => s + m.montant, 0)
+  if (misDeCote <= 0) return { etat: 'sans_rythme' }
+  const parMois = Math.round(misDeCote / 3)
+  const mois = Math.ceil((o.montantCible - solde) / parMois)
+  return { etat: 'projete', parMois, atteintLe: versISO(addMonths(parseISO(aujourdhui), mois)) }
+}
+
+// ---------- Ordre des objectifs ----------
+
+/** Ordre d'affichage : l'ordre choisi s'il existe, sinon Sécurité d'abord puis par nom. */
+export function ordonnerObjectifs(objectifs: ObjectifEpargne[], securiteId?: string): ObjectifEpargne[] {
+  const parDefaut = (a: ObjectifEpargne, b: ObjectifEpargne) =>
+    (a.id === securiteId ? -1 : b.id === securiteId ? 1 : 0) || a.nom.localeCompare(b.nom, 'fr')
+  return [...objectifs].sort((a, b) => {
+    if (a.ordre !== undefined && b.ordre !== undefined) return a.ordre - b.ordre
+    if (a.ordre !== undefined) return -1
+    if (b.ordre !== undefined) return 1
+    return parDefaut(a, b)
+  })
+}
+
+/** Déplace un objectif d'un cran (−1 : monter, +1 : descendre). Renvoie le nouvel ordre de chacun (0, 1, 2…). */
+export function deplacerObjectif(ordonnes: ObjectifEpargne[], id: string, sens: -1 | 1): Map<string, number> {
+  const ids = ordonnes.map((o) => o.id)
+  const i = ids.indexOf(id)
+  const j = i + sens
+  if (i >= 0 && j >= 0 && j < ids.length) [ids[i], ids[j]] = [ids[j], ids[i]]
+  return new Map(ids.map((x, k) => [x, k]))
 }

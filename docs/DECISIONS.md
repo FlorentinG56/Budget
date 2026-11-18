@@ -59,6 +59,9 @@ Complète le cahier des charges. Formulées de façon générale : aucune donné
 | Épargne déjà présente | Proposition générale : compte au choix, nom et montant |
 | Imprévu payé avec l'épargne | Vraie dépense (solde, catégories), retirée de l'objectif, hors budget du jour |
 | Disponible réel | Solde − épargne réservée |
+| Dettes (onglet Épargne) | Crédits actifs non remboursés : capital restant dû, progression (montant emprunté → 0), dernière mensualité (date de fin ou fin réelle si le capital est remboursé avant), mensualités restantes ; total du capital restant par devise |
+| Projection d'un objectif | Moyenne mensuelle des mises de côté des 3 derniers mois (reprises non déduites) appliquée à ce qui manque ; rien sans montant cible ; « Pas encore de rythme » sans mise de côté récente |
+| Ordre des objectifs | Sécurité d'abord puis par nom, tant qu'aucun ordre n'est choisi ; boutons monter / descendre (« Organiser »), ordre mémorisé |
 | Calendrier | Vue du compte du budget = compte + carte additionnés. Projection : reste du budget du jour, budget des jours suivants et reste « à côté » jusqu'à la fin de la période, puis budget par période réparti sur les jours des périodes futures |
 | Cases du calendrier | Montants en 12 px gras, contraste ≥ 4,5:1 (vert et rouge foncés). Passé : fond blanc, dépensé (vert si budget du jour respecté, rouge sinon). Futur : fond bleu très pâle, solde projeté ; rouge pâle si négatif. Aujourd'hui : pastille bleue |
 | Bandeaux d'alerte | Budget du jour dépassé, solde projeté négatif, charges à venir (délai réglable), fin d'un crédit, rappel de sauvegarde. Masquables jusqu'au lendemain |

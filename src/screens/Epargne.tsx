@@ -9,7 +9,13 @@ import { Ecran, TitreSection } from '../components/ui'
 import { ChampMontant, lireMontant, versTexteMontant } from '../budget/ChampMontant'
 import { formaterMontant } from '../domain/argent'
 import { aujourdhui, libelleCourt } from '../domain/dates'
-import { historiqueObjectif, parMoisPourAtteindre, progressionObjectif, soldeObjectif, totalParDevise } from '../domain/epargne'
+import { deplacerObjectif, historiqueObjectif, ordonnerObjectifs, parMoisPourAtteindre, progressionObjectif, rythmeObjectif, soldeObjectif, totalParDevise, type Rythme } from '../domain/epargne'
+import { dettes, totalDettes } from '../domain/dettes'
+import { useRecurrences } from '../hooks/donnees'
+import { ListeRecurrences } from './reglages/Recurrences'
+import type { Devise } from '../domain/types'
+import { format, parseISO } from 'date-fns'
+import { fr } from 'date-fns/locale/fr'
 import { soldeCompte } from '../domain/soldes'
 import type { Compte, ObjectifEpargne } from '../domain/types'
 import { indexer, useComptes, useObjectifs, useOperations, useReglages } from '../hooks/donnees'
@@ -30,20 +36,34 @@ export function Epargne() {
   const comptes = useComptes()
   const operations = useOperations()
   const reglages = useReglages()
+  const [organiser, setOrganiser] = useState(false)
   if (!objectifs || !comptes || !operations || !reglages) return <Ecran titre="Épargne"><div /></Ecran>
 
   const mapComptes = indexer(comptes)
-  const actifs = objectifs.filter((o) => !o.archive && mapComptes.has(o.compteId))
-    .sort((a, b) => (a.id === reglages.objectifSecuriteId ? -1 : b.id === reglages.objectifSecuriteId ? 1 : a.nom.localeCompare(b.nom)))
+  const actifs = ordonnerObjectifs(objectifs.filter((o) => !o.archive && mapComptes.has(o.compteId)), reglages.objectifSecuriteId)
+  const deplacer = async (id: string, sens: -1 | 1) => {
+    const ordre = deplacerObjectif(actifs, id, sens)
+    await db.transaction('rw', db.objectifs, async () => { for (const [k, v] of ordre) await db.objectifs.update(k, { ordre: v }) })
+  }
   const archives = objectifs.filter((o) => o.archive)
   const totaux = totalParDevise(objectifs, operations, comptes)
   // tant qu'il n'y a pas d'autre objectif que Sécurité : proposer d'enregistrer l'épargne déjà présente
   const proposerEpargneExistante = !objectifs.some((o) => o.id !== reglages.objectifSecuriteId)
 
-  const ligne = (o: ObjectifEpargne) => {
+  const ligne = (o: ObjectifEpargne, i: number) => {
     const compte = mapComptes.get(o.compteId)!
     const solde = soldeObjectif(o, operations)
     const prog = progressionObjectif(solde, o.montantCible)
+    const rythme = rythmeObjectif(o, solde, aujourdhui())
+    if (organiser) return (
+      <div key={o.id} className="flex min-h-[56px] items-center gap-2 px-4 py-2">
+        <span className="min-w-0 flex-1 truncate text-[16px] font-medium text-encre">{o.id === reglages.objectifSecuriteId ? '🛟 ' : '🐷 '}{o.nom}</span>
+        <button type="button" aria-label={`Monter ${o.nom}`} disabled={i === 0} onClick={() => void deplacer(o.id, -1)}
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-fond text-[18px] text-bleu active:bg-bleu-pale disabled:opacity-30">↑</button>
+        <button type="button" aria-label={`Descendre ${o.nom}`} disabled={i === actifs.length - 1} onClick={() => void deplacer(o.id, 1)}
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-fond text-[18px] text-bleu active:bg-bleu-pale disabled:opacity-30">↓</button>
+      </div>
+    )
     return (
       <button key={o.id} type="button" onClick={() => nav.ouvrir(<PageObjectif id={o.id} />)} className="block w-full px-4 py-3 text-left active:bg-fond">
         <span className="flex items-center gap-3">
@@ -58,6 +78,7 @@ export function Epargne() {
           <IconeChevron taille={18} className="text-encre-pale" />
         </span>
         {prog !== undefined && <span className="mt-2 block"><Barre valeur={prog} /></span>}
+        <TexteRythme rythme={rythme} devise={compte.devise} />
       </button>
     )
   }
@@ -76,7 +97,17 @@ export function Epargne() {
 
       {proposerEpargneExistante && <ProposerEpargneExistante comptes={comptes.filter((c) => c.type !== 'carte_credit')} />}
 
-      {actifs.length > 0 && <Groupe>{actifs.map(ligne)}</Groupe>}
+      {actifs.length > 0 && (<>
+        <div className="flex items-end justify-between">
+          <TitreSection>Objectifs</TitreSection>
+          {actifs.length > 1 && (
+            <button type="button" onClick={() => setOrganiser(!organiser)} className="min-h-[40px] px-1 text-[15px] font-semibold text-bleu">{organiser ? 'Terminé' : 'Organiser'}</button>
+          )}
+        </div>
+        <Groupe>{actifs.map(ligne)}</Groupe>
+      </>)}
+
+      <SectionDettes />
 
       <SoldesDisponibles comptes={comptes} objectifs={objectifs} />
 
@@ -175,6 +206,7 @@ export function PageObjectif({ id }: { id: string }) {
               {objectif.dateCible && <span>pour le {libelleCourt(objectif.dateCible)}</span>}
             </p>
             {parMois && <p className="text-[13px] text-encre-douce">Il faut mettre de côté {formaterMontant(parMois, compte.devise)} par mois pour y arriver.</p>}
+            <TexteRythme rythme={rythmeObjectif(objectif, solde, aujourdhui())} devise={compte.devise} />
           </div>
         ) : null}
         <div className="mt-3 flex gap-2">
@@ -298,5 +330,70 @@ export function EditionObjectif({ id }: { id?: string }) {
       )}
       {existant && !existant.archive && <p className="px-1 text-[13px] text-encre-pale">Un objectif archivé ne réserve plus d’argent ; son historique est conservé.</p>}
     </Page>
+  )
+}
+
+const moisAnnee = (d: string) => format(parseISO(d), 'MMMM yyyy', { locale: fr })
+
+/** « À ce rythme, atteint en juin 2027 » (rien pour un objectif sans cible). */
+function TexteRythme({ rythme, devise }: { rythme: Rythme; devise: Devise }) {
+  if (rythme.etat === 'sans_cible') return null
+  return (
+    <span className="mt-1.5 block text-[13px] text-encre-douce">
+      {rythme.etat === 'atteint' ? '🎉 Objectif atteint'
+        : rythme.etat === 'sans_rythme' ? 'Pas encore de rythme (aucune mise de côté ces 3 derniers mois)'
+        : <>À ce rythme ({formaterMontant(rythme.parMois, devise)}/mois), atteint en <b className="text-encre">{moisAnnee(rythme.atteintLe)}</b></>}
+    </span>
+  )
+}
+
+/** Crédits en cours : capital restant dû, progression, dernière mensualité, mensualités restantes ; total par devise. */
+function SectionDettes() {
+  const nav = useNav()
+  const recurrences = useRecurrences()
+  const operations = useOperations()
+  const comptes = useComptes(true)
+  if (!recurrences || !operations || !comptes) return null
+  const liste = dettes(recurrences, operations, comptes, aujourdhui())
+  if (liste.length === 0) return null
+  const totaux = totalDettes(liste)
+  const noms = indexer(comptes)
+  return (
+    <>
+      <TitreSection>Dettes</TitreSection>
+      <Groupe>
+        {liste.map((d) => (
+          <button key={d.recurrence.id} type="button" onClick={() => nav.ouvrir(<ListeRecurrences genre="charges" />)} className="block w-full px-4 py-3 text-left active:bg-fond">
+            <span className="flex items-center gap-3">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[16px] font-medium text-encre">🏦 {d.recurrence.libelle}</span>
+                <span className="block truncate text-[13px] text-encre-pale">{noms.get(d.recurrence.compteId)?.nom}</span>
+              </span>
+              <span className="text-right">
+                <span className="block text-[17px] font-bold text-encre">{d.capitalRestant !== undefined ? formaterMontant(d.capitalRestant, d.devise) : '—'}</span>
+                <span className="block text-[12px] text-encre-pale">{d.capitalRestant !== undefined ? 'restant dû' : 'capital non renseigné'}</span>
+              </span>
+              <IconeChevron taille={18} className="text-encre-pale" />
+            </span>
+            {d.progression !== undefined && (
+              <span className="mt-2 block"><Barre valeur={d.progression} /></span>
+            )}
+            <span className="mt-1.5 flex justify-between gap-2 text-[13px] text-encre-douce">
+              <span>{d.derniereMensualite ? `Dernière mensualité : ${moisAnnee(d.derniereMensualite)}` : 'Sans date de fin'}</span>
+              <span>{d.mensualitesRestantes !== undefined ? `${d.mensualitesRestantes} mensualité${d.mensualitesRestantes > 1 ? 's' : ''}` : ''}</span>
+            </span>
+          </button>
+        ))}
+        {totaux.size > 0 && (
+          <div className="flex min-h-[46px] items-center justify-between bg-fond/60 px-4 py-2 text-[15px]">
+            <span className="font-semibold text-encre">Total restant dû</span>
+            <span className="font-bold text-encre">{[...totaux].map(([dv, t]) => formaterMontant(t, dv)).join(' + ')}</span>
+          </div>
+        )}
+      </Groupe>
+      {liste.some((d) => d.progression === undefined) && (
+        <p className="px-1 text-[13px] leading-snug text-encre-pale">Pour la barre de progression, renseigne le capital restant dû et le montant emprunté dans la fiche du crédit.</p>
+      )}
+    </>
   )
 }

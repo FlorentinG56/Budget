@@ -128,6 +128,7 @@ export interface ObjectifEpargne {
   dateCible?: DateISO
   mouvements: MouvementEpargne[]
   archive: boolean
+  ordre?: number // ordre d'affichage choisi (sinon : Sécurité d'abord, puis par nom)
 }
 
 export interface Reglages {
