@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fenetre, parCategorie, resumeFenetre, soldesJournaliers } from './analyses'
+import { depensesParMois, ecart, fenetre, parCategorie, resumeFenetre, sansCategorie, soldesJournaliers, topDepenses } from './analyses'
 import type { Compte, ObjectifEpargne, Operation, Recurrence } from './types'
 
 let n = 0
@@ -73,5 +73,42 @@ describe('résumé et catégories', () => {
   it('détail par sous-catégorie', () => {
     const l = parCategorie(ops, new Set(['chq']), f, avant, { chargesFixes: false, categorie: 'alim' })
     expect(l.map((x) => [x.id, x.montant, x.precedent])).toEqual([['alim/epicerie', 3500, 0], ['alim/resto', 1000, 2000]])
+  })
+})
+
+describe('tâche B : moyenne, mois par mois, top, à classer', () => {
+  const f = { debut: '2026-11-01', fin: '2026-11-30' }
+  const p1 = { debut: '2026-10-01', fin: '2026-10-31' }, p2 = { debut: '2026-09-01', fin: '2026-09-30' }, p3 = { debut: '2026-08-01', fin: '2026-08-31' }
+  const ops = [
+    op({ date: '2026-11-05', montant: 30000, categorieId: 'alim' }),
+    op({ date: '2026-10-05', montant: 20000, categorieId: 'alim' }),
+    op({ date: '2026-09-05', montant: 25000, categorieId: 'alim' }),
+    op({ date: '2026-08-05', montant: 15000, categorieId: 'alim' }), op({ date: '2026-08-06', montant: 6000, categorieId: 'loisirs' }),
+    op({ date: '2026-07-05', montant: 99999, categorieId: 'alim' }), // 4e mois avant : hors moyenne
+  ]
+  it('moyenne des 3 périodes précédentes, en plus de la précédente', () => {
+    const l = parCategorie(ops, new Set(['chq']), f, [p1, p2, p3], { chargesFixes: false })
+    expect(l.map((x) => [x.id, x.montant, x.precedent, x.moyenne])).toEqual([['alim', 30000, 20000, 20000], ['loisirs', 0, 0, 2000]])
+  })
+  it('moyenne sur les seules périodes qui existent ; aucune si pas de période précédente', () => {
+    expect(parCategorie(ops, new Set(['chq']), f, [p1, undefined, undefined], { chargesFixes: false })[0].moyenne).toBe(20000)
+    expect(parCategorie(ops, new Set(['chq']), f, [], { chargesFixes: false })[0].moyenne).toBeUndefined()
+  })
+  it('écart en montant et en %', () => {
+    expect(ecart(30000, 20000)).toEqual({ montant: 10000, pourcent: 50 })
+    expect(ecart(1000, 0)).toEqual({ montant: 1000, pourcent: undefined })
+  })
+  it('dépenses du quotidien mois par mois (charges fixes exclues)', () => {
+    const m = depensesParMois([...ops, op({ date: '2026-11-01', type: 'prelevement_fixe', montant: 120000 })], new Set(['chq']), '2026-11-18', 6)
+    expect(m.map((x) => [x.debut, x.montant, x.decalage])).toEqual([
+      ['2026-06-01', 0, -5], ['2026-07-01', 99999, -4], ['2026-08-01', 21000, -3], ['2026-09-01', 25000, -2], ['2026-10-01', 20000, -1], ['2026-11-01', 30000, 0],
+    ])
+    expect(m[5].libelle).toBe('nov')
+  })
+  it('top des plus grosses dépenses et dépenses à classer', () => {
+    const l = [op({ id: 'a', date: '2026-11-02', montant: 500 }), op({ id: 'b', date: '2026-11-03', montant: 8000, categorieId: 'x' }), op({ id: 'c', date: '2026-11-04', montant: 1200 }),
+      op({ id: 'd', date: '2026-10-30', montant: 99999 }), op({ id: 'e', date: '2026-11-04', montant: 99999, type: 'revenu' })]
+    expect(topDepenses(l, new Set(['chq']), f, 2).map((o) => o.id)).toEqual(['b', 'c'])
+    expect(sansCategorie(l, new Set(['chq']), f).map((o) => o.id)).toEqual(['c', 'a'])
   })
 })

@@ -93,15 +93,19 @@ export interface LigneAnalyse {
   id: string | null // catégorie (ou sous-catégorie) ; null : sans catégorie
   montant: Centimes
   part: number
-  precedent: Centimes
+  precedent: Centimes // fenêtre précédente
+  moyenne?: Centimes // moyenne des fenêtres précédentes (jusqu'à 3), si au moins une existe
 }
 
 /**
  * Dépenses par catégorie (ou par sous-catégorie d'une catégorie), triées, avec la fenêtre précédente.
  * Les charges fixes sont incluses ou non (elles ont aussi une catégorie : loyer → Logement).
  */
-export function parCategorie(operations: Operation[], comptes: Set<string>, f: Bornes, precedente: Bornes | undefined,
+export function parCategorie(operations: Operation[], comptes: Set<string>, f: Bornes, precedentes: Bornes | undefined | (Bornes | undefined)[],
   options: { chargesFixes: boolean; categorie?: string }): LigneAnalyse[] {
+  // précédentes : la fenêtre juste avant, puis les suivantes en remontant (jusqu'à 3 pour la moyenne)
+  const liste = (Array.isArray(precedentes) ? precedentes : [precedentes]).filter((b): b is Bornes => !!b).slice(0, 3)
+  const precedente = liste[0]
   const somme = (b: Bornes) => {
     const m = new Map<string | null, Centimes>()
     for (const op of operations) {
@@ -115,8 +119,41 @@ export function parCategorie(operations: Operation[], comptes: Set<string>, f: B
   }
   const actuel = somme(f)
   const avant = precedente ? somme(precedente) : new Map<string | null, Centimes>()
+  const anciennes = liste.map(somme)
   const total = [...actuel.values()].reduce((s, v) => s + v, 0)
-  return [...new Set([...actuel.keys(), ...avant.keys()])]
-    .map((id) => ({ id, montant: actuel.get(id) ?? 0, part: total ? (actuel.get(id) ?? 0) / total : 0, precedent: avant.get(id) ?? 0 }))
+  const ids = new Set([...actuel.keys(), ...anciennes.flatMap((m) => [...m.keys()])])
+  return [...ids]
+    .map((id) => ({
+      id, montant: actuel.get(id) ?? 0, part: total ? (actuel.get(id) ?? 0) / total : 0, precedent: avant.get(id) ?? 0,
+      moyenne: anciennes.length ? Math.round(anciennes.reduce((s, m) => s + (m.get(id) ?? 0), 0) / anciennes.length) : undefined,
+    }))
     .sort((a, b) => b.montant - a.montant || b.precedent - a.precedent)
+}
+
+/** Écart par rapport à une référence (montant et pourcentage) ; pourcentage absent si la référence est nulle. */
+export function ecart(montant: Centimes, reference: Centimes): { montant: Centimes; pourcent?: number } {
+  const d = montant - reference
+  return { montant: d, pourcent: reference ? Math.round((d / reference) * 100) : undefined }
+}
+
+/** Dépenses du quotidien (type « dépense ») de chaque mois, du plus ancien au plus récent. */
+export function depensesParMois(operations: Operation[], comptes: Set<string>, date: DateISO, nombre: number): { debut: DateISO; fin: DateISO; libelle: string; montant: Centimes; decalage: number }[] {
+  const mois = Array.from({ length: nombre }, (_, i) => i - (nombre - 1)).map((decalage) => ({ ...fenetre('mois', date, decalage)!, decalage }))
+  return mois.map((m) => ({
+    debut: m.debut, fin: m.fin, decalage: m.decalage,
+    libelle: format(parseISO(m.debut), 'MMM', { locale: fr }).replace('.', ''),
+    montant: operations.filter((o) => o.type === 'depense' && comptes.has(o.compteId) && o.date >= m.debut && o.date <= m.fin).reduce((s, o) => s + o.montant, 0),
+  }))
+}
+
+/** Les plus grosses dépenses de la fenêtre. */
+export function topDepenses(operations: Operation[], comptes: Set<string>, f: Bornes, n = 5): Operation[] {
+  return operations.filter((o) => o.type === 'depense' && comptes.has(o.compteId) && o.date >= f.debut && o.date <= f.fin)
+    .sort((a, b) => b.montant - a.montant || b.date.localeCompare(a.date)).slice(0, n)
+}
+
+/** Dépenses sans catégorie de la fenêtre (à classer), les plus récentes d'abord. */
+export function sansCategorie(operations: Operation[], comptes: Set<string>, f: Bornes): Operation[] {
+  return operations.filter((o) => o.type === 'depense' && !o.categorieId && comptes.has(o.compteId) && o.date >= f.debut && o.date <= f.fin)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.creeLe - a.creeLe)
 }

@@ -1,11 +1,14 @@
 import { format, parseISO } from 'date-fns'
 import { fr } from 'date-fns/locale/fr'
 import { useMemo, useState } from 'react'
-import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { LigneOperation } from '../components/LigneOperation'
 import { IconeChevron } from '../components/Icones'
 import { Ecran, TitreSection } from '../components/ui'
-import { fenetre, parCategorie, resumeFenetre, soldesJournaliers, type Granularite, type LigneAnalyse, type PointSolde } from '../domain/analyses'
+import { depensesParMois, ecart, fenetre, parCategorie, resumeFenetre, sansCategorie, soldesJournaliers, topDepenses, type Granularite, type LigneAnalyse, type PointSolde } from '../domain/analyses'
+import { Page } from '../nav/Navigation'
+import type { Bornes } from '../domain/budget'
+import { useOperations } from '../hooks/donnees'
 import { formaterMontant } from '../domain/argent'
 import { montantCompact } from '../domain/projection'
 import type { Categorie, Devise } from '../domain/types'
@@ -28,6 +31,7 @@ export function Analyses() {
   const [decalage, setDecalage] = useState(0)
   const [chargesFixes, setChargesFixes] = useState(false)
   const [ouverte, setOuverte] = useState<string | null | undefined>(undefined)
+  const [douzeMois, setDouzeMois] = useState(false)
 
   const vues = useMemo<Vue[]>(() => {
     if (!ctx) return []
@@ -44,7 +48,8 @@ export function Analyses() {
     if (!ctx || !vue || !objectifs) return undefined
     const f = fenetre(g, ctx.date, decalage, ctx.paie)
     if (!f) return undefined
-    const precedente = fenetre(g, ctx.date, decalage - 1, ctx.paie)
+    const precedentes = [1, 2, 3].map((k) => fenetre(g, ctx.date, decalage - k, ctx.paie))
+    const precedente = precedentes[0]
     const comptesVue = ctx.comptes.filter((c) => vue.comptes.has(c.id))
     const points: PointSolde[] = soldesJournaliers(comptesVue, ctx.operations, f, ctx.date)
     // projection en pointillé jusqu'à la fin de la fenêtre (fenêtre en cours)
@@ -57,9 +62,13 @@ export function Analyses() {
     return {
       f, precedente, points,
       resume: resumeFenetre(comptesVue, ctx.operations, objectifs, f, ctx.date),
-      lignes: parCategorie(ctx.operations, vue.comptes, f, precedente, { chargesFixes }),
+      lignes: parCategorie(ctx.operations, vue.comptes, f, precedentes, { chargesFixes }),
+      precedentes,
+      top: topDepenses(ctx.operations, vue.comptes, f, 5),
+      aClasser: sansCategorie(ctx.operations, vue.comptes, f),
+      mois: depensesParMois(ctx.operations, vue.comptes, ctx.date, douzeMois ? 12 : 6),
     }
-  }, [ctx, vue, objectifs, g, decalage, chargesFixes])
+  }, [ctx, vue, objectifs, g, decalage, chargesFixes, douzeMois])
 
   if (!ctx || !vue || !categories) return <Ecran titre="Analyses"><div /></Ecran>
   const cats = indexer(categories)
@@ -91,6 +100,12 @@ export function Analyses() {
       </div>
 
       {!donnees ? <p className="rounded-carte bg-white p-5 text-center text-encre-douce shadow-carte">Pas de données pour cette période.</p> : (<>
+        {donnees.aClasser.length > 0 && (
+          <button type="button" onClick={() => nav.ouvrir(<PageAClasser comptes={vue.comptes} fenetre={donnees.f} />)}
+            className="flex items-center justify-between gap-3 rounded-carte border border-[#F59E0B]/30 bg-[#FEF6E7] px-4 py-3 text-left text-[15px] font-medium text-[#92400E] active:opacity-80">
+            <span>🏷️ {donnees.aClasser.length} dépense{donnees.aClasser.length > 1 ? 's' : ''} à classer</span><IconeChevron taille={18} />
+          </button>
+        )}
         <Resume resume={donnees.resume} devise={vue.devise} enCours={donnees.f.fin >= ctx.date} />
         <CourbeSolde points={donnees.points} devise={vue.devise} />
 
@@ -101,17 +116,34 @@ export function Analyses() {
             {chargesFixes ? '✓ ' : '+ '}Charges fixes
           </button>
         </div>
-        <Categories lignes={donnees.lignes} cats={cats} devise={vue.devise} ouverte={ouverte} surOuvrir={setOuverte}
+        <Categories lignes={donnees.lignes} libellePrecedente={g === 'semaine' ? 'sem. préc.' : g === 'mois' ? 'mois préc.' : 'période préc.'} nbMoyenne={donnees.precedentes.filter(Boolean).length} cats={cats} devise={vue.devise} ouverte={ouverte} surOuvrir={setOuverte}
           detail={(id) => ({
-            sous: parCategorie(ctx.operations, vue.comptes, donnees.f, donnees.precedente, { chargesFixes, categorie: id ?? undefined }),
+            sous: parCategorie(ctx.operations, vue.comptes, donnees.f, donnees.precedentes, { chargesFixes, categorie: id ?? undefined }),
             ops: ctx.operations.filter((o) => vue.comptes.has(o.compteId) && o.date >= donnees.f.debut && o.date <= donnees.f.fin
               && (o.type === 'depense' || (chargesFixes && o.type === 'prelevement_fixe')) && (o.categorieId ?? null) === id).sort((a, b) => b.date.localeCompare(a.date)),
           })}
           comptes={indexer(ctx.comptes)} surOperation={(id) => nav.ouvrir(<EditionOperation id={id} />)} />
         <p className="px-1 text-[13px] leading-snug text-encre-pale">
-          Comparaison avec {g === 'semaine' ? 'la semaine' : g === 'mois' ? 'le mois' : 'la période'} précédent{g === 'semaine' || g === 'paie' ? 'e' : ''} : en rouge si tu as dépensé plus.
+          Couleur : par rapport à la moyenne des 3 {g === 'semaine' ? 'semaines' : g === 'mois' ? 'mois' : 'périodes'} précédent{g === 'mois' ? 's' : 'es'} (rouge = plus, vert = moins) ; le trait sur la barre marque cette moyenne.
           Exclus : virements, remboursements de carte, ajustements de solde.
         </p>
+
+        <TitreSection>Plus grosses dépenses</TitreSection>
+        {donnees.top.length === 0 ? <p className="px-1 text-[15px] text-encre-douce">Aucune dépense.</p> : (
+          <div className="divide-y divide-trait overflow-hidden rounded-carte bg-white shadow-carte">
+            {donnees.top.map((o) => <LigneOperation key={o.id} op={o} comptes={indexer(ctx.comptes)} categories={cats} surClic={() => nav.ouvrir(<EditionOperation id={o.id} />)} />)}
+          </div>
+        )}
+
+        <div className="flex items-end justify-between">
+          <TitreSection>Mois par mois</TitreSection>
+          <button type="button" role="switch" aria-checked={douzeMois} onClick={() => setDouzeMois(!douzeMois)}
+            className={`mb-0.5 min-h-[34px] rounded-full px-3 text-[13px] font-medium shadow-carte ${douzeMois ? 'bg-bleu text-white' : 'bg-white text-encre-douce'}`}>
+            {douzeMois ? '✓ ' : ''}12 mois
+          </button>
+        </div>
+        <MoisParMois mois={donnees.mois} devise={vue.devise} selection={g === 'mois' ? decalage : undefined}
+          surChoix={(d) => { setGranularite('mois'); setDecalage(d); setOuverte(undefined); window.scrollTo(0, 0) }} />
       </>)}
     </Ecran>
   )
@@ -150,7 +182,7 @@ function CourbeSolde({ points, devise }: { points: PointSolde[]; devise: Devise 
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={points} margin={{ top: 12, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid vertical={false} stroke="#E3E7ED" />
-            <XAxis dataKey="date" tickFormatter={(d) => String(Number(String(d).slice(8)))} tick={{ fontSize: 11, fill: '#98A0AE' }} tickLine={false} axisLine={{ stroke: '#E3E7ED' }} minTickGap={18} />
+            <XAxis dataKey="date" tickFormatter={(d) => format(parseISO(String(d)), 'd MMM', { locale: fr }).replace('.', '')} tick={{ fontSize: 11, fill: '#98A0AE' }} tickLine={false} axisLine={{ stroke: '#E3E7ED' }} minTickGap={28} />
             <YAxis tickFormatter={(v) => montantCompact(v)} tick={{ fontSize: 11, fill: '#98A0AE' }} tickLine={false} axisLine={false} width={40} />
             {negatif && <ReferenceLine y={0} stroke="#E0524D" strokeDasharray="3 3" />}
             <Tooltip cursor={{ stroke: '#98A0AE', strokeWidth: 1 }} content={({ active, payload, label }) => {
@@ -173,19 +205,26 @@ function CourbeSolde({ points, devise }: { points: PointSolde[]; devise: Devise 
   )
 }
 
-function Comparaison({ montant, precedent, devise }: { montant: number; precedent: number; devise: Devise }) {
-  const ecart = montant - precedent
-  if (ecart === 0) return <span className="text-encre-pale">= période précédente</span>
+function Comparaison({ ligne, devise, libellePrecedente, nbMoyenne }: { ligne: LigneAnalyse; devise: Devise; libellePrecedente: string; nbMoyenne: number }) {
+  const texte = (montant: number, reference: number) => {
+    const e = ecart(montant, reference)
+    return e.montant === 0 ? '=' : `${formaterMontant(e.montant, devise, { signe: true })}${e.pourcent !== undefined ? ` (${e.pourcent > 0 ? '+' : '−'}${Math.abs(e.pourcent)} %)` : ''}`
+  }
+  const em = ligne.moyenne !== undefined ? ecart(ligne.montant, ligne.moyenne).montant : 0
   return (
-    <span className={ecart > 0 ? 'text-rouge' : 'text-vert'}>
-      {formaterMontant(ecart, devise, { signe: true })}{precedent ? ` (${ecart > 0 ? '+' : '−'}${Math.round((Math.abs(ecart) / precedent) * 100)} %)` : ''}
-      <span className="text-encre-pale"> vs {formaterMontant(precedent, devise)}</span>
+    <span className="flex flex-wrap gap-x-3">
+      <span className="text-encre-pale">{libellePrecedente} : {texte(ligne.montant, ligne.precedent)}</span>
+      {ligne.moyenne !== undefined && (
+        <span className={em > 0 ? 'text-rouge-fonce' : em < 0 ? 'text-vert-fonce' : 'text-encre-pale'}>
+          moy. {nbMoyenne} : {formaterMontant(ligne.moyenne, devise)} → {texte(ligne.montant, ligne.moyenne)}
+        </span>
+      )}
     </span>
   )
 }
 
-function Barres({ lignes, nom, devise, surClic, ouverte }: { lignes: LigneAnalyse[]; nom: (id: string | null) => string; devise: Devise; surClic?: (id: string | null) => void; ouverte?: string | null }) {
-  const max = Math.max(1, ...lignes.map((l) => l.montant))
+function Barres({ lignes, nom, devise, surClic, ouverte, libellePrecedente, nbMoyenne }: { lignes: LigneAnalyse[]; nom: (id: string | null) => string; devise: Devise; surClic?: (id: string | null) => void; ouverte?: string | null; libellePrecedente: string; nbMoyenne: number }) {
+  const max = Math.max(1, ...lignes.map((l) => Math.max(l.montant, l.moyenne ?? 0)))
   return (
     <>
       {lignes.map((l) => (
@@ -195,17 +234,21 @@ function Barres({ lignes, nom, devise, surClic, ouverte }: { lignes: LigneAnalys
             <span className="truncate text-encre">{nom(l.id)}</span>
             <span className="shrink-0 font-semibold text-encre">{formaterMontant(l.montant, devise)} <span className="font-normal text-encre-pale">· {Math.round(l.part * 100)} %</span></span>
           </span>
-          <span className="mt-1.5 block h-2 rounded-full bg-fond">
+          <span className="relative mt-1.5 block h-2 rounded-full bg-fond">
             <span className="block h-full rounded-[4px]" style={{ width: `${Math.max(l.montant > 0 ? 1.5 : 0, (l.montant / max) * 100)}%`, background: BLEU }} />
+            {l.moyenne !== undefined && l.moyenne > 0 && (
+              <span className="absolute -top-1 h-4 w-[2px] rounded bg-encre" style={{ left: `calc(${(l.moyenne / max) * 100}% - 1px)` }} aria-hidden="true" />
+            )}
           </span>
-          <span className="mt-1 block text-[12px]"><Comparaison montant={l.montant} precedent={l.precedent} devise={devise} /></span>
+          <span className="mt-1 block text-[12px]"><Comparaison ligne={l} devise={devise} libellePrecedente={libellePrecedente} nbMoyenne={nbMoyenne} /></span>
         </button>
       ))}
     </>
   )
 }
 
-function Categories({ lignes, cats, devise, ouverte, surOuvrir, detail, comptes, surOperation }: {
+function Categories({ lignes, cats, devise, ouverte, surOuvrir, detail, comptes, surOperation, libellePrecedente, nbMoyenne }: {
+  libellePrecedente: string; nbMoyenne: number
   lignes: LigneAnalyse[]; cats: Map<string, Categorie>; devise: Devise; ouverte: string | null | undefined; surOuvrir: (id: string | null | undefined) => void
   detail: (id: string | null) => { sous: LigneAnalyse[]; ops: import('../domain/types').Operation[] }
   comptes: Map<string, import('../domain/types').Compte>; surOperation: (id: string) => void
@@ -216,13 +259,13 @@ function Categories({ lignes, cats, devise, ouverte, surOuvrir, detail, comptes,
     <div className="divide-y divide-trait overflow-hidden rounded-carte bg-white shadow-carte">
       {lignes.map((l) => (
         <div key={l.id ?? 'aucune'}>
-          <Barres lignes={[l]} nom={nom} devise={devise} ouverte={ouverte} surClic={(id) => surOuvrir(ouverte === id ? undefined : id)} />
+          <Barres lignes={[l]} nom={nom} devise={devise} ouverte={ouverte} libellePrecedente={libellePrecedente} nbMoyenne={nbMoyenne} surClic={(id) => surOuvrir(ouverte === id ? undefined : id)} />
           {ouverte === l.id && (() => {
             const d = detail(l.id)
             return (
               <div className="border-t border-trait bg-fond/60">
                 {d.sous.some((s) => s.id !== null) && (
-                  <div className="py-1"><Barres lignes={d.sous} devise={devise} nom={(id) => (id ? cats.get(id)?.nom ?? '—' : 'Sans sous-catégorie')} /></div>
+                  <div className="py-1"><Barres lignes={d.sous} devise={devise} libellePrecedente={libellePrecedente} nbMoyenne={nbMoyenne} nom={(id) => (id ? cats.get(id)?.nom ?? '—' : 'Sans sous-catégorie')} /></div>
                 )}
                 <div className="divide-y divide-trait border-t border-trait bg-white">
                   {d.ops.map((o) => <LigneOperation key={o.id} op={o} comptes={comptes} categories={cats} surClic={() => surOperation(o.id)} />)}
@@ -233,5 +276,64 @@ function Categories({ lignes, cats, devise, ouverte, surOuvrir, detail, comptes,
         </div>
       ))}
     </div>
+  )
+}
+
+/** Dépenses du quotidien mois par mois ; toucher un mois l'ouvre dans l'analyse mensuelle. */
+function MoisParMois({ mois, devise, selection, surChoix }: { mois: ReturnType<typeof depensesParMois>; devise: Devise; selection?: number; surChoix: (decalage: number) => void }) {
+  return (
+    <section className="rounded-carte bg-white px-2 pb-2 pt-3 shadow-carte" aria-label="Dépenses du quotidien mois par mois">
+      <p className="px-2 text-[12px] text-encre-pale">Dépenses du quotidien (hors charges fixes). Touche un mois pour l’analyser.</p>
+      <div className="h-[180px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={mois} margin={{ top: 12, right: 8, bottom: 0, left: 0 }}>
+            <CartesianGrid vertical={false} stroke="#E3E7ED" />
+            <XAxis dataKey="libelle" tick={{ fontSize: 11, fill: '#98A0AE' }} tickLine={false} axisLine={{ stroke: '#E3E7ED' }} interval={0} />
+            <YAxis tickFormatter={(v) => montantCompact(v)} tick={{ fontSize: 11, fill: '#98A0AE' }} tickLine={false} axisLine={false} width={40} />
+            <Tooltip cursor={{ fill: '#F0F5FE' }} content={({ active, payload }) => {
+              if (!active || !payload?.length) return null
+              const m = payload[0].payload as (typeof mois)[number]
+              return (
+                <div className="rounded-[10px] bg-white px-3 py-2 text-[13px] shadow-carte ring-1 ring-trait">
+                  <p className="capitalize text-encre-douce">{format(parseISO(m.debut), 'MMMM yyyy', { locale: fr })}</p>
+                  <p className="font-semibold text-encre">{formaterMontant(m.montant, devise)}</p>
+                </div>
+              )
+            }} />
+            <Bar dataKey="montant" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={false} onClick={(d) => surChoix((d as unknown as (typeof mois)[number]).decalage)} cursor="pointer">
+              {mois.map((m) => <Cell key={m.debut} fill={m.decalage === selection ? '#1A2233' : BLEU} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pt-1">
+        {mois.map((m) => (
+          <button key={m.debut} type="button" onClick={() => surChoix(m.decalage)} aria-label={`Analyser ${format(parseISO(m.debut), 'MMMM yyyy', { locale: fr })}`}
+            className={`min-h-[34px] shrink-0 rounded-full px-2.5 text-[12px] capitalize ${m.decalage === selection ? 'bg-bleu text-white' : 'bg-fond text-encre-douce'}`}>
+            {m.libelle} · {montantCompact(m.montant)}
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/** Dépenses sans catégorie de la période affichée : toucher pour la classer. */
+function PageAClasser({ comptes, fenetre: f }: { comptes: Set<string>; fenetre: Bornes }) {
+  const nav = useNav()
+  const operations = useOperations()
+  const categories = useCategories()
+  const ctx = useContexteBudget()
+  if (!operations || !categories || !ctx) return <Page titre="À classer"><div /></Page>
+  const liste = sansCategorie(operations, comptes, f)
+  return (
+    <Page titre="Dépenses à classer">
+      <p className="px-1 text-[15px] text-encre-douce">Touche une dépense pour lui donner une catégorie. Elle disparaît de cette liste une fois classée.</p>
+      {liste.length === 0 ? <p className="rounded-carte bg-white p-5 text-center text-[15px] text-vert-fonce shadow-carte">✓ Tout est classé.</p> : (
+        <div className="divide-y divide-trait overflow-hidden rounded-carte bg-white shadow-carte">
+          {liste.map((o) => <LigneOperation key={o.id} op={o} comptes={indexer(ctx.comptes)} categories={indexer(categories)} surClic={() => nav.ouvrir(<EditionOperation id={o.id} />)} />)}
+        </div>
+      )}
+    </Page>
   )
 }
