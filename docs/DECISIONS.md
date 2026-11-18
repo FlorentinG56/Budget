@@ -63,3 +63,6 @@ Complète le cahier des charges. Formulées de façon générale : aucune donné
 | Cases du calendrier | Montants en 12 px gras, contraste ≥ 4,5:1 (vert et rouge foncés). Passé : fond blanc, dépensé (vert si budget du jour respecté, rouge sinon). Futur : fond bleu très pâle, solde projeté ; rouge pâle si négatif. Aujourd'hui : pastille bleue |
 | Bandeaux d'alerte | Budget du jour dépassé, solde projeté négatif, charges à venir (délai réglable), fin d'un crédit, rappel de sauvegarde. Masquables jusqu'au lendemain |
 | Analyses | Semaine, période de paie, mois, compte par compte. Charges fixes exclues des catégories par défaut. Toutes les dépenses figurent dans les catégories, quel que soit leur financement |
+| Comparaison des catégories | Avec la période précédente et avec la moyenne des périodes précédentes de même durée (jusqu'à 3, le nombre réellement utilisé est affiché) ; la couleur suit la moyenne, un trait la marque sur la barre |
+| Mois par mois | Dépenses du quotidien (hors charges fixes) des 6 derniers mois, 12 en option ; toucher un mois ouvre l'analyse mensuelle. Barres au contraste ≥ 3:1, mois affiché en plus foncé |
+| Top et dépenses à classer | 5 plus grosses dépenses de la période affichée ; dépenses sans catégorie signalées avec une liste pour les classer |
