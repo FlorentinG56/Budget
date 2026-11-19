@@ -25,6 +25,7 @@ Complète le cahier des charges. Formulées de façon générale : aucune donné
 | Sauvegarde chiffrée | AES-GCM 256, clé PBKDF2-SHA256 600 000 itérations, mot de passe de 8 caractères minimum, enregistrée via le menu Partager d'iOS. Le code et Face ID ne sont jamais sauvegardés ; une restauration garde ceux de l'appareil |
 | Sauvegarde en un geste | Le bandeau de rappel contient « Sauvegarder maintenant » : feuille avec mot de passe et menu Partager, sans passer par Réglages. Le mot de passe ne vit que dans le formulaire, jamais enregistré (test dédié) |
 | Sauvegarde vers un outil de notes | Via le menu Partager d'iOS ; pas d'envoi automatique (il faudrait un serveur et une clé d'accès dans l'app) |
+| Tableur en ligne (Google Sheets) | Écarté : pas d'export dédié ni de synchronisation (données financières envoyées hors de l'appareil). L'export CSV reste disponible ; la sauvegarde chiffrée est le seul moyen de restaurer |
 | Export CSV | « ; », virgule décimale, UTF-8 avec BOM (Excel en français), montants signés, colonne « Budget du jour » |
 
 ## Charges fixes, crédits et revenus
