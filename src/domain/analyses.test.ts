@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { depensesParMois, ecart, fenetre, parCategorie, resumeFenetre, sansCategorie, soldesJournaliers, topDepenses } from './analyses'
-import type { Compte, ObjectifEpargne, Operation, Recurrence } from './types'
+import type { Compte, Operation, Recurrence } from './types'
 
 let n = 0
 const op = (p: Partial<Operation>): Operation => ({ id: `o${n++}`, date: '2026-11-18', montant: 0, type: 'depense', compteId: 'chq', creeLe: 0, ...p })
@@ -58,11 +58,14 @@ describe('résumé et catégories', () => {
   const f = { debut: '2026-11-11', fin: '2026-11-24' }
   const avant = { debut: '2026-10-28', fin: '2026-11-10' }
   it('résumé : revenus, charges fixes, dépenses, épargne (virements et ajustements exclus)', () => {
-    const sec: ObjectifEpargne = { id: 's', nom: 'S', compteId: 'chq', archive: false, mouvements: [
-      { id: 'a', date: '2026-11-12', montant: 10000, sens: 'mise_de_cote' }, { id: 'b', date: '2026-11-14', montant: 2500, sens: 'reprise' }, { id: 'c', date: '2026-10-01', montant: 1, sens: 'mise_de_cote' },
-    ] }
-    const r = resumeFenetre([compte({ dateDepart: '2026-11-01' })], ops, [sec], f, '2026-11-30')
-    expect(r).toEqual({ revenus: 180000, chargesFixes: 120000, depensesQuotidien: 4500, epargne: 7500, soldeFin: 100000 + 180000 - 120000 - 4500 - 99999 - 777 - 2000 })
+    const ep = compte({ id: 'ep', type: 'epargne', dateDepart: '2026-11-01' })
+    const versEpargne = [
+      op({ date: '2026-11-12', type: 'virement', compteDestinationId: 'ep', montant: 10000 }),
+      op({ date: '2026-11-14', type: 'virement', compteId: 'ep', compteDestinationId: 'chq', montant: 2500 }),
+      op({ date: '2026-10-01', type: 'virement', compteDestinationId: 'ep', montant: 1 }), // hors fenêtre
+    ]
+    const r = resumeFenetre([compte({ dateDepart: '2026-11-01' })], [...ops, ...versEpargne], [compte({}), ep], f, '2026-11-30')
+    expect(r).toEqual({ revenus: 180000, chargesFixes: 120000, depensesQuotidien: 4500, epargne: 7500, soldeFin: 100000 + 180000 - 120000 - 4500 - 99999 - 777 - 2000 - 7500 })
   })
   it('par catégorie, charges fixes incluses ou non, comparaison', () => {
     const avec = parCategorie(ops, new Set(['chq']), f, avant, { chargesFixes: true })

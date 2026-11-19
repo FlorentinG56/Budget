@@ -1,7 +1,8 @@
 import { aujourdhui } from '../domain/dates'
 import { montantAjustement, soldeCompte } from '../domain/soldes'
 import { genererOperations } from '../domain/recurrences'
-import type { AffectationFin, Categorie, Centimes, Compte, MouvementEpargne, ObjectifEpargne, Operation, Periode, Recurrence, Voyage } from '../domain/types'
+import { CIBLE_SECURITE_DEFAUT, repartirFinQuinzaine, soldeObjectif } from '../domain/epargne'
+import type { AffectationFin, Categorie, Centimes, Compte, DateISO, MouvementEpargne, ObjectifEpargne, Operation, Periode, Recurrence, Voyage } from '../domain/types'
 import { db, lireReglages, modifierReglages, type BudgetDB } from './db'
 import { categoriesInitiales } from './donneesInitiales'
 
@@ -45,14 +46,44 @@ export async function choisirComptesBudget(compteId: string, carteId: string | n
 }
 
 export async function enregistrerOperation(op: Omit<Operation, 'id' | 'creeLe'> & { id?: string }, base: BudgetDB = db): Promise<Operation> {
-  const existante = op.id ? await base.operations.get(op.id) : undefined
-  const complete: Operation = { ...op, id: op.id ?? nouvelId(), creeLe: existante?.creeLe ?? Date.now() }
-  await base.operations.put(complete)
-  return complete
+  return base.transaction('rw', base.operations, base.comptes, async () => {
+    const existante = op.id ? await base.operations.get(op.id) : undefined
+    const complete: Operation = { ...op, id: op.id ?? nouvelId(), creeLe: existante?.creeLe ?? Date.now() }
+    await synchroniserVirementLie(complete, base)
+    await base.operations.put(complete)
+    return complete
+  })
+}
+
+/**
+ * Imprévu payé avec l'épargne : la dépense reste sur le compte (ou la carte) et un virement du même montant
+ * va du compte épargne vers le compte principal (à refaire à la banque). Le virement suit la dépense
+ * (montant, date) ; il est supprimé si la dépense n'est plus payée avec l'épargne.
+ */
+async function synchroniserVirementLie(op: Operation, base: BudgetDB): Promise<void> {
+  const ancien = op.virementLieId ? await base.operations.get(op.virementLieId) : undefined
+  const compte = await base.comptes.get(op.compteId)
+  const destination = compte?.type === 'carte_credit' ? compte.compteRemboursementId : op.compteId
+  if (op.type !== 'depense' || !op.epargneCompteId || !destination) {
+    if (ancien) await base.operations.delete(ancien.id)
+    delete op.virementLieId
+    return
+  }
+  const virement: Operation = {
+    id: ancien?.id ?? nouvelId(), creeLe: ancien?.creeLe ?? Date.now(), date: op.date, montant: op.montant, type: 'virement',
+    compteId: op.epargneCompteId, compteDestinationId: destination, note: `Retrait d’épargne${op.note ? ` : ${op.note}` : ' (imprévu)'}`, lieA: op.id,
+  }
+  await base.operations.put(virement)
+  op.virementLieId = virement.id
 }
 
 export async function supprimerOperation(id: string, base: BudgetDB = db): Promise<void> {
-  await base.operations.delete(id)
+  await base.transaction('rw', base.operations, async () => {
+    const op = await base.operations.get(id)
+    if (op?.virementLieId) await base.operations.delete(op.virementLieId)
+    if (op?.lieA) await base.operations.update(op.lieA, { virementLieId: undefined })
+    await base.operations.delete(id)
+  })
 }
 
 export async function enregistrerCompte(c: Omit<Compte, 'id' | 'ordre'> & { id?: string; ordre?: number }, base: BudgetDB = db): Promise<Compte> {
@@ -194,7 +225,6 @@ export async function validerPeriode(p: { debut: string; fin: string; enveloppe:
     ...(p.aCote && p.aCote > 0 ? { aCote: p.aCote } : {}),
   }
   await base.periodes.put(periode)
-  if (periode.epargneMiseDeCote > 0) await synchroniserSecurite(base)
   return periode
 }
 
@@ -205,7 +235,6 @@ export async function modifierEnveloppe(periodeId: string, enveloppe: Centimes, 
 /** Bilan de fin de période : le reste va en épargne ou est reporté ; un déficit peut être retiré de la suivante. */
 export async function cloturerPeriode(periodeId: string, affectation: AffectationFin, montant: Centimes, aCoteVersSecurite = 0, base: BudgetDB = db) {
   await base.periodes.update(periodeId, { cloturee: true, affectationFin: affectation, montantAffecte: montant, aCoteVersSecurite: Math.max(0, aCoteVersSecurite) })
-  if (affectation === 'epargne' || aCoteVersSecurite > 0) await synchroniserSecurite(base)
 }
 
 /** Revenu ponctuel ou virement reçu en cours de période : « l'ajouter à l'enveloppe ? » */
@@ -249,42 +278,88 @@ export async function supprimerMouvement(objectifId: string, mouvementId: string
 }
 
 /**
- * Objectif « Sécurité » : créé sur le compte du budget journalier, il reçoit l'épargne mise de côté à la paie
- * et le reste de chaque période. Synchronise les mouvements automatiques (une fois par période, sans doublon).
+ * Sécurité : argent laissé sur le compte principal pour les imprévus. Elle est enregistrée dans l'objectif « Sécurité »
+ * (créé sur le compte du budget du jour, cible 2 000 par défaut). Plus aucun mouvement automatique : elle n'augmente
+ * qu'à la fin de quinzaine (choix de l'utilisateur) ou à la main. Les mouvements automatiques d'avant sont conservés.
  */
 export async function synchroniserSecurite(base: BudgetDB = db): Promise<string | undefined> {
-  return base.transaction('rw', base.objectifs, base.reglages, base.comptes, base.periodes, async () => {
+  return base.transaction('rw', base.objectifs, base.reglages, base.comptes, async () => {
     const r = await lireReglages(base)
     let securite = r.objectifSecuriteId ? await base.objectifs.get(r.objectifSecuriteId) : undefined
     if (!securite) {
       const comptes = await base.comptes.orderBy('ordre').toArray()
-      const compte = comptes.find((c) => c.inclusBudgetJournalier && c.type !== 'carte_credit' && !c.archive) ?? comptes.find((c) => c.type !== 'carte_credit')
+      const compte = comptes.find((c) => c.inclusBudgetJournalier && c.type === 'cheque' && !c.archive) ?? comptes.find((c) => c.type === 'cheque')
       if (!compte) return undefined
-      securite = { id: nouvelId(), nom: 'Sécurité', compteId: compte.id, mouvements: [], archive: false }
+      securite = { id: nouvelId(), nom: 'Sécurité', compteId: compte.id, montantCible: CIBLE_SECURITE_DEFAUT, mouvements: [], archive: false }
       await base.objectifs.add(securite)
-      await modifierReglages({ objectifSecuriteId: securite.id }, base)
+      await modifierReglages({ objectifSecuriteId: securite.id, epargneV2: true }, base)
+    } else if (!r.epargneV2) {
+      // passage à la nouvelle épargne : cible de 2 000 si aucune n'était fixée (une seule fois, modifiable ensuite)
+      if (!securite.montantCible) await base.objectifs.update(securite.id, { montantCible: CIBLE_SECURITE_DEFAUT })
+      if (securite.archive) await base.objectifs.update(securite.id, { archive: false })
+      await modifierReglages({ epargneV2: true }, base)
     }
-    const attendus = new Map<string, Omit<MouvementEpargne, 'id'>>()
-    for (const p of await base.periodes.toArray()) {
-      if (p.epargneMiseDeCote > 0) attendus.set(`paie:${p.id}`, { date: p.dateDebut, montant: p.epargneMiseDeCote, sens: 'mise_de_cote', source: `paie:${p.id}` })
-      if (p.cloturee && p.affectationFin === 'epargne' && (p.montantAffecte ?? 0) > 0) {
-        attendus.set(`bilan:${p.id}`, { date: p.dateFin, montant: p.montantAffecte!, sens: 'mise_de_cote', source: `bilan:${p.id}` })
-      }
-      if (p.cloturee && (p.aCoteVersSecurite ?? 0) > 0) {
-        attendus.set(`acote:${p.id}`, { date: p.dateFin, montant: p.aCoteVersSecurite!, sens: 'mise_de_cote', source: `acote:${p.id}` })
-      }
-    }
-    let changement = false
-    const mouvements = securite.mouvements.map((m) => {
-      const a = m.source ? attendus.get(m.source) : undefined
-      if (!a) return m
-      attendus.delete(m.source!)
-      if (a.montant !== m.montant) { changement = true; return { ...m, montant: a.montant } }
-      return m
-    })
-    for (const a of attendus.values()) { mouvements.push({ ...a, id: nouvelId() }); changement = true }
-    if (changement) await base.objectifs.update(securite.id, { mouvements })
     return securite.id
+  })
+}
+
+export interface DecisionFinQuinzaine {
+  compteId: string // compte principal
+  reste: Centimes // solde − dû carte − sécurité, le soir du dernier jour
+  epargne: Centimes // part à épargner (virement vers compteEpargneId)
+  compteEpargneId?: string
+  projetId?: string // projet qui reçoit la part épargnée (facultatif)
+  date: DateISO // date du virement d'épargne
+}
+
+/**
+ * Fin de quinzaine (jour de paie) : la part épargnée devient un virement compte principal → compte épargne
+ * (l'utilisateur fait le même à sa banque), le reste s'ajoute à la sécurité ; la période est close.
+ */
+export async function terminerQuinzaine(periodeId: string, d: DecisionFinQuinzaine, base: BudgetDB = db): Promise<void> {
+  await base.transaction('rw', [base.periodes, base.operations, base.objectifs, base.reglages, base.comptes], async () => {
+    const periode = await base.periodes.get(periodeId)
+    if (!periode || periode.cloturee) return
+    const compteEpargne = d.compteEpargneId ? await base.comptes.get(d.compteEpargneId) : undefined
+    const { epargne, securite } = repartirFinQuinzaine(d.reste, d.epargne, !!compteEpargne && compteEpargne.type === 'epargne')
+    let virementEpargneId: string | undefined
+    if (epargne > 0 && compteEpargne) {
+      virementEpargneId = nouvelId()
+      await base.operations.add({ id: virementEpargneId, date: d.date, montant: epargne, type: 'virement', compteId: d.compteId, compteDestinationId: compteEpargne.id,
+        note: 'Épargne de fin de quinzaine', creeLe: Date.now() })
+      if (d.projetId && (await base.objectifs.get(d.projetId))) {
+        const p = (await base.objectifs.get(d.projetId))!
+        await base.objectifs.update(p.id, { mouvements: [...p.mouvements, { id: nouvelId(), date: d.date, montant: epargne, sens: 'mise_de_cote', source: `fin:${periodeId}` }] })
+      }
+    }
+    if (securite > 0) {
+      const id = (await lireReglages(base)).objectifSecuriteId
+      const sec = id ? await base.objectifs.get(id) : undefined
+      if (sec) await base.objectifs.update(sec.id, { mouvements: [...sec.mouvements, { id: nouvelId(), date: periode.dateFin, montant: securite, sens: 'mise_de_cote', source: `fin:${periodeId}` }] })
+    }
+    await base.periodes.update(periodeId, {
+      cloturee: true, affectationFin: 'aucune', montantAffecte: 0,
+      finReste: d.reste, finEpargne: epargne, finSecurite: securite, ...(virementEpargneId ? { virementEpargneId } : {}),
+    })
+  })
+}
+
+/**
+ * Conversion (une fois) des anciens objectifs : « securite » ajoute leur montant à la sécurité (même compte seulement),
+ * puis l'objectif est archivé (historique conservé) ; « archiver » l'archive seulement.
+ */
+export async function convertirObjectif(objectifId: string, choix: 'securite' | 'archiver', base: BudgetDB = db): Promise<void> {
+  await base.transaction('rw', base.objectifs, base.operations, base.reglages, async () => {
+    const o = await base.objectifs.get(objectifId)
+    const secId = (await lireReglages(base)).objectifSecuriteId
+    if (!o || o.archive || o.id === secId) return
+    if (choix === 'securite') {
+      const sec = secId ? await base.objectifs.get(secId) : undefined
+      const montant = soldeObjectif(o, await base.operations.toArray())
+      if (!sec || sec.compteId !== o.compteId) throw new Error('Pas sur le même compte que la sécurité')
+      if (montant > 0) await base.objectifs.update(sec.id, { mouvements: [...sec.mouvements, { id: nouvelId(), date: aujourdhui(), montant, sens: 'mise_de_cote', note: `Ancien objectif « ${o.nom} »` }] })
+    }
+    await base.objectifs.update(o.id, { archive: true })
   })
 }
 

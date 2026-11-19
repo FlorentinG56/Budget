@@ -18,7 +18,7 @@ export function operationsVersCsv(operations: Operation[], comptes: Compte[], ca
   const lignes = [...operations].sort((a, b) => a.date.localeCompare(b.date) || a.creeLe - b.creeLe).map((op) => {
     const compte = c.get(op.compteId)
     const dest = op.compteDestinationId ? c.get(op.compteDestinationId) : undefined
-    const budget = op.type !== 'depense' ? '' : op.objectifEpargneId ? 'Payée avec l’épargne' : op.horsBudget ? 'À côté du budget' : 'Comptée'
+    const budget = op.type !== 'depense' ? '' : op.epargneCompteId ? 'Imprévu (épargne)' : op.objectifEpargneId ? 'Imprévu (sécurité ou épargne)' : op.horsBudget ? 'Imprévu (solde du compte)' : 'Comptée'
     return [
       op.date, TYPES[op.type], compte?.nom ?? '', compte?.devise ?? '', nombre(montantSigne(op)),
       op.categorieId ? cat.get(op.categorieId)?.nom ?? '' : '', op.sousCategorieId ? cat.get(op.sousCategorieId)?.nom ?? '' : '',

@@ -101,7 +101,7 @@ export function enveloppeProposee(prev: Pick<Previsions, 'revenus' | 'charges'>,
 export function depensesBudget(operations: Operation[], budget: Set<string>, du: DateISO, au: DateISO): Centimes {
   let total = 0
   for (const op of operations) {
-    if (op.type === 'depense' && !op.objectifEpargneId && !op.horsBudget && budget.has(op.compteId) && op.date >= du && op.date <= au) total += op.montant
+    if (op.type === 'depense' && !op.objectifEpargneId && !op.horsBudget && !op.epargneCompteId && budget.has(op.compteId) && op.date >= du && op.date <= au) total += op.montant
   }
   return total
 }
@@ -277,7 +277,7 @@ export function depensesParFinancement(operations: Operation[], budget: Set<stri
   const f: Financement = { budget: 0, aCote: 0, epargne: 0 }
   for (const op of operations) {
     if (op.type !== 'depense' || !budget.has(op.compteId) || op.date < du || op.date > au) continue
-    if (op.objectifEpargneId) f.epargne += op.montant
+    if (op.objectifEpargneId || op.epargneCompteId) f.epargne += op.montant
     else if (op.horsBudget) f.aCote += op.montant
     else f.budget += op.montant
   }

@@ -19,6 +19,6 @@ describe('export CSV', () => {
     expect(lignes[1]).toBe('2026-11-18;Dépense;Compte courant;CAD;-12,50;Alimentation;Épicerie;"Épicerie du coin; ""promo""";;;Comptée')
     expect(lignes[2]).toBe('2026-11-19;Revenu;Compte courant;CAD;1500,00;;;Salaire;;;')
     expect(lignes[3]).toBe('2026-11-20;Virement;Compte en euros;EUR;-100,00;;;;Compte courant;145,20;')
-    expect(lignes[4]).toBe('2026-11-21;Dépense;Compte courant;CAD;-120,00;;;;;;À côté du budget')
+    expect(lignes[4]).toBe('2026-11-21;Dépense;Compte courant;CAD;-120,00;;;;;;Imprévu (solde du compte)')
   })
 })

@@ -6,7 +6,8 @@ import { Bouton, Champ, Choix, Groupe, Saisie } from '../../components/formulair
 import { analyserMontant, formaterMontant } from '../../domain/argent'
 import { categoriesPrincipales, sousCategories } from '../../domain/categories'
 import type { Operation } from '../../domain/types'
-import { useCategories, useComptes, useObjectifs } from '../../hooks/donnees'
+import { useCategories, useComptes, useObjectifs, useReglages } from '../../hooks/donnees'
+import { champsImprevu, choixImprevu, comptesEpargne, projetsEpargne, type ChoixImprevu } from '../../domain/epargne'
 import { Page, useNav } from '../../nav/Navigation'
 
 const TITRES: Record<Operation['type'], string> = {
@@ -28,17 +29,18 @@ export function EditionOperation({ id }: { id: string }) {
   const [categorieId, setCategorieId] = useState('')
   const [sousCategorieId, setSousCategorieId] = useState('')
   const [note, setNote] = useState('')
-  const [objectifId, setObjectifId] = useState('') // '' : compté dans le budget ; 'acote' : à côté ; sinon id d'objectif
+  const [choix, setChoix] = useState<ChoixImprevu>('') // '' : comptée dans le budget du jour ; sinon imprévu payé comment
   const objectifs = useObjectifs()
+  const reglages = useReglages()
   const [confirmerSuppression, setConfirmer] = useState(false)
 
   useEffect(() => {
     if (!op) return
     setMontant(versTexte(op.montant)); setDate(op.date); setCompteId(op.compteId)
-    setCategorieId(op.categorieId ?? ''); setSousCategorieId(op.sousCategorieId ?? ''); setNote(op.note ?? ''); setObjectifId(op.objectifEpargneId ?? (op.horsBudget ? 'acote' : ''))
-  }, [op?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+    setCategorieId(op.categorieId ?? ''); setSousCategorieId(op.sousCategorieId ?? ''); setNote(op.note ?? ''); setChoix(choixImprevu(op, reglages?.objectifSecuriteId))
+  }, [op?.id, !!reglages]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (op === undefined || !comptes || !categories) return <Page titre="Opération"><div /></Page>
+  if (op === undefined || !comptes || !categories || !reglages) return <Page titre="Opération"><div /></Page>
   if (op === null) return <Page titre="Opération"><p className="text-encre-douce">Cette opération n’existe plus.</p></Page>
 
   const modifiable = op.type === 'depense' || op.type === 'revenu' || op.type === 'prelevement_fixe'
@@ -47,6 +49,8 @@ export function EditionOperation({ id }: { id: string }) {
   const compte = comptes.find((c) => c.id === compteId)
   // Une dépense peut être sur un compte ou sur une carte ; un revenu, sur un compte seulement.
   const comptesPossibles = comptes.filter((c) => (!c.archive || c.id === op.compteId) && (avecCategorie || c.type !== 'carte_credit'))
+  // imprévu payé avec l'épargne : compte épargne de la même devise (celui déjà utilisé s'il existe encore)
+  const compteEpargne = comptes.find((c) => c.id === op.epargneCompteId) ?? (compte ? comptesEpargne(comptes).find((c) => c.devise === compte.devise) : undefined)
 
   const enregistrer = async () => {
     if (modifiable && !valeur) return
@@ -61,8 +65,7 @@ export function EditionOperation({ id }: { id: string }) {
       categorieId: avecCategorie ? categorieId || undefined : op.categorieId,
       sousCategorieId: avecCategorie ? sousCategorieId || undefined : op.sousCategorieId,
       note: note.trim() || undefined,
-      objectifEpargneId: op.type === 'depense' ? (objectifId && objectifId !== 'acote' ? objectifId : undefined) : op.objectifEpargneId,
-      horsBudget: op.type === 'depense' ? (objectifId === 'acote' ? true : undefined) : op.horsBudget,
+      ...(op.type === 'depense' ? champsImprevu(choix, reglages.objectifSecuriteId, compteEpargne?.id) : {}),
     })
     retour()
   }
@@ -121,20 +124,28 @@ export function EditionOperation({ id }: { id: string }) {
 
       {op.type === 'depense' && (() => {
         const c = comptes.find((x) => x.id === compteId)
-        const compteEpargne = c?.type === 'carte_credit' ? c.compteRemboursementId : compteId
-        const possibles = (objectifs ?? []).filter((o) => o.compteId === compteEpargne && (!o.archive || o.id === objectifId))
+        const principal = c?.type === 'carte_credit' ? c.compteRemboursementId : compteId
+        const securite = (objectifs ?? []).find((o) => o.id === reglages.objectifSecuriteId && o.compteId === principal)
+        const projets = compteEpargne ? projetsEpargne(objectifs ?? [], comptes).filter((o) => o.compteId === compteEpargne.id) : []
+        const ancien = choix.startsWith('objectif:') ? (objectifs ?? []).find((o) => `objectif:${o.id}` === choix) : undefined
         return (
           <Groupe>
-            <Champ libelle="Budget du jour" aide={objectifId ? 'Hors budget du jour, toujours dans sa catégorie' : undefined}>
-              <Choix value={objectifId} onChange={(e) => setObjectifId(e.target.value)}>
+            <Champ libelle="Budget du jour" aide={choix ? 'Imprévu : hors budget du jour, toujours dans sa catégorie' : undefined}>
+              <Choix value={choix} onChange={(e) => setChoix(e.target.value as ChoixImprevu)} aria-label="Payé comment">
                 <option value="">Comptée</option>
-                <option value="acote">À côté du budget</option>
-                {possibles.map((o) => <option key={o.id} value={o.id}>Payée avec l’épargne {o.nom}</option>)}
+                <option value="solde">Imprévu · {c?.type === 'carte_credit' ? 'carte de crédit' : 'solde du compte'}</option>
+                {securite && <option value="securite">Imprévu · sécurité</option>}
+                {compteEpargne && <option value="epargne">Imprévu · épargne</option>}
+                {projets.map((o) => <option key={o.id} value={`projet:${o.id}`}>Imprévu · épargne, projet {o.nom}</option>)}
+                {ancien && <option value={choix}>Ancien objectif {ancien.nom}</option>}
               </Choix>
             </Champ>
           </Groupe>
         )
       })()}
+      {op.type === 'depense' && (choix === 'epargne' || choix.startsWith('projet:')) && compteEpargne && (
+        <p className="px-1 text-[13px] leading-snug text-encre-pale">Un virement du même montant de {compteEpargne.nom} vers ton compte accompagne cette dépense : fais-le aussi à ta banque.</p>
+      )}
 
       <Groupe>
         <Champ libelle={op.type === 'revenu' || op.type === 'prelevement_fixe' ? 'Libellé' : 'Note'}>

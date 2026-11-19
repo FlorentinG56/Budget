@@ -47,18 +47,23 @@ function ContenuBilan({ periode, ctx, categories }: { periode: Periode; ctx: Non
           <p className="flex justify-between"><span className="text-encre-douce">Budget</span><span className="font-semibold">{formaterMontant(bilan.enveloppe, devise)}</span></p>
           <p className="flex justify-between"><span className="text-encre-douce">Dépensé{enCours ? ' (jusqu’ici)' : ''}</span><span className="font-semibold">{formaterMontant(bilan.depense, devise)}</span></p>
           <p className="flex justify-between border-t border-trait pt-1.5">
-            <span className="font-semibold">{enCours ? 'Reste' : bilan.ecart > 0 ? 'Reste → épargne' : bilan.ecart < 0 ? 'Dépassement' : 'Pile dans le budget'}</span>
+            <span className="font-semibold">{enCours ? 'Reste' : bilan.ecart > 0 ? (periode.affectationFin === 'epargne' ? 'Reste → épargne' : 'Reste du budget') : bilan.ecart < 0 ? 'Dépassement' : 'Pile dans le budget'}</span>
             <span className={`text-[18px] font-bold ${bilan.ecart > 0 ? 'text-vert' : bilan.ecart < 0 ? 'text-rouge' : ''}`}>{formaterMontant(enCours ? bilan.ecart : Math.abs(bilan.ecart), devise)}</span>
           </p>
           <p className="flex justify-between"><span className="text-encre-douce">Jours dans le budget du jour</span><span className="font-semibold">{jours.respectes} / {jours.total}</span></p>
           {periode.epargneMiseDeCote > 0 && <p className="flex justify-between"><span className="text-encre-douce">Mis de côté à la paie</span><span className="font-semibold">{formaterMontant(periode.epargneMiseDeCote, devise)}</span></p>}
           {(periode.aCote || fin2.aCote > 0) ? (<>
-            <p className="flex justify-between border-t border-trait pt-1.5"><span className="text-encre-douce">🛍️ À côté du budget</span><span className="font-semibold">{formaterMontant(periode.aCote ?? 0, devise)}</span></p>
-            <p className="flex justify-between"><span className="text-encre-douce">Dépensé à côté</span><span className="font-semibold">{formaterMontant(fin2.aCote, devise)}</span></p>
-            <p className="flex justify-between"><span className="text-encre-douce">{enCours ? 'Reste à côté' : resteCote >= 0 ? 'Reste à côté → épargne' : 'Dépassement à côté'}</span>
+            <p className="flex justify-between border-t border-trait pt-1.5"><span className="text-encre-douce">🛍️ Non affecté</span><span className="font-semibold">{formaterMontant(periode.aCote ?? 0, devise)}</span></p>
+            <p className="flex justify-between"><span className="text-encre-douce">Imprévus payés avec le solde</span><span className="font-semibold">{formaterMontant(fin2.aCote, devise)}</span></p>
+            <p className="flex justify-between"><span className="text-encre-douce">{resteCote >= 0 ? 'Reste du non affecté' : 'Dépassement du non affecté'}</span>
               <span className={`font-semibold ${resteCote < 0 ? 'text-rouge' : resteCote > 0 ? 'text-vert' : ''}`}>{formaterMontant(resteCote, devise)}</span></p>
           </>) : null}
-          {fin2.epargne > 0 && <p className="flex justify-between"><span className="text-encre-douce">🐷 Payé avec l’épargne</span><span className="font-semibold">{formaterMontant(fin2.epargne, devise)}</span></p>}
+          {fin2.epargne > 0 && <p className="flex justify-between"><span className="text-encre-douce">🐷 Imprévus payés avec la sécurité ou l’épargne</span><span className="font-semibold">{formaterMontant(fin2.epargne, devise)}</span></p>}
+          {periode.finReste !== undefined && (<>
+            <p className="flex justify-between border-t border-trait pt-1.5"><span className="font-semibold">💰 Fin de quinzaine : reste à répartir</span><span className="font-semibold">{formaterMontant(periode.finReste, devise)}</span></p>
+            <p className="flex justify-between"><span className="text-encre-douce">🏦 Épargné</span><span className="font-semibold text-vert">{formaterMontant(periode.finEpargne ?? 0, devise)}</span></p>
+            <p className="flex justify-between"><span className="text-encre-douce">🛟 En sécurité</span><span className="font-semibold">{formaterMontant(periode.finSecurite ?? 0, devise)}</span></p>
+          </>)}
         </div>
       </Groupe>
 

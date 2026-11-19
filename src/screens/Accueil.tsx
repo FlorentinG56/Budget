@@ -15,7 +15,8 @@ import { aujourdhui } from '../domain/dates'
 import { trierRecentes } from '../domain/operations'
 import { montantDuCarte, soldeCompte } from '../domain/soldes'
 import { indexer, useCategories, useComptes, useObjectifs, useOperations, useRecurrences, useReglages, useVoyages } from '../hooks/donnees'
-import { epargneReservee } from '../domain/epargne'
+import { disponible, partDuSolde, progressionObjectif, soldeObjectif } from '../domain/epargne'
+import { ConversionEpargne, Mouvement, PageObjectif } from './Epargne'
 import { voyageAccueil } from '../domain/voyage'
 import { CarteVoyage } from './voyages/Voyages'
 import { useNav } from '../nav/Navigation'
@@ -23,9 +24,19 @@ import { EditionOperation } from './operations/EditionOperation'
 import { ListeOperations } from './operations/ListeOperations'
 import { EditionCompte, ListeComptes, texteSolde } from './reglages/Comptes'
 
+function Jauge({ valeur, couleur, fond, libelle }: { valeur: number; couleur: string; fond: string; libelle: string }) {
+  const pct = Math.round(Math.min(1, Math.max(0, valeur)) * 100)
+  return (
+    <div className={`mt-0.5 h-2 overflow-hidden rounded-full ${fond}`} role="progressbar" aria-label={libelle} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+      <div className={`h-full rounded-full ${couleur}`} style={{ width: `${pct}%` }} />
+    </div>
+  )
+}
+
 export function Accueil() {
   const nav = useNav()
   const [remboursement, setRemboursement] = useState(false)
+  const [mouvement, setMouvement] = useState<null | 'mise_de_cote' | 'reprise'>(null)
   const comptes = useComptes()
   const categories = useCategories()
   const operations = useOperations()
@@ -49,7 +60,9 @@ export function Accueil() {
 
   const solde = principal ? soldeCompte(principal, ops, date) : 0
   const du = carte ? montantDuCarte(carte, ops, date) : 0
-  const reserve = principal ? epargneReservee(objectifs, ops, principal.id) : 0
+  const securite = objectifs.find((o) => o.id === reglages.objectifSecuriteId && o.compteId === principal?.id && !o.archive)
+  const montantSecurite = securite ? soldeObjectif(securite, ops, date) : 0
+  const dispo = disponible(solde, carte ? du : 0, montantSecurite)
 
   return (
     <Ecran titre="Accueil" action={<span className="inline-block pb-1.5 text-[15px] text-encre-douce first-letter:uppercase">{titreDate}</span>}>
@@ -70,6 +83,8 @@ export function Accueil() {
         </button>
       )}
 
+      <ConversionEpargne />
+
       {voyage && mapComptes.get(voyage.compteId) && <CarteVoyage voyage={voyage} compte={mapComptes.get(voyage.compteId)!} />}
       <CarteBudget devise={principal?.devise ?? 'CAD'} />
 
@@ -81,24 +96,47 @@ export function Accueil() {
             </p>
             <p className={`mt-0.5 text-[34px] font-bold leading-tight tracking-tight ${solde < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(solde, principal.devise)}</p>
           </button>
-          {reserve !== 0 && (
-            <div className="mt-2 space-y-0.5 text-[14px]">
-              <p className="flex justify-between"><span className="text-encre-douce">dont épargne réservée</span><span className="text-encre-douce">{formaterMontant(-reserve, principal.devise)}</span></p>
-              <p className="flex justify-between"><span className="text-encre-douce">Disponible réel</span>
-                <span className={`font-semibold ${solde - reserve < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(solde - reserve, principal.devise)}</span></p>
-            </div>
+          <div className="mt-2 space-y-1 text-[15px]">
+            {carte && du !== 0 && (
+              <p className="flex justify-between"><span className="text-encre-douce">Montant dû sur la carte</span><span className="font-semibold text-encre">{formaterMontant(-Math.max(0, du), carte.devise)}</span></p>
+            )}
+            {securite && (
+              <p className="flex justify-between"><span className="text-encre-douce">dont 🛟 sécurité</span><span className="font-semibold text-encre">{formaterMontant(-montantSecurite, principal.devise)}</span></p>
+            )}
+            {(securite || (carte && du !== 0)) && (
+              <p className="flex justify-between border-t border-trait pt-1"><span className="font-semibold text-encre">Disponible</span>
+                <span className={`text-[18px] font-bold ${dispo < 0 ? 'text-rouge' : 'text-bleu'}`}>{formaterMontant(dispo, principal.devise)}</span></p>
+            )}
+          </div>
+          {carte && du > 0 && (
+            <button type="button" onClick={() => setRemboursement(true)}
+              className="mt-2 min-h-[44px] w-full rounded-[12px] bg-bleu-pale text-[15px] font-semibold text-bleu active:opacity-70">
+              💳 Rembourser la carte
+            </button>
           )}
-          {carte && du !== 0 && (
-            <div className="mt-3 space-y-1.5 border-t border-trait pt-3 text-[15px]">
-              <p className="flex justify-between"><span className="text-encre-douce">Montant dû sur la carte</span><span className="font-semibold text-encre">{formaterMontant(du, carte.devise)}</span></p>
-              <p className="flex justify-between"><span className="text-encre-douce">Solde après remboursement</span>
-                <span className={`font-semibold ${solde - du < 0 ? 'text-rouge' : 'text-bleu'}`}>{formaterMontant(solde - du, principal.devise)}</span></p>
-              {du > 0 && (
-                <button type="button" onClick={() => setRemboursement(true)}
-                  className="mt-1.5 min-h-[44px] w-full rounded-[12px] bg-bleu-pale text-[15px] font-semibold text-bleu active:opacity-70">
-                  💳 Rembourser la carte
-                </button>
-              )}
+          {securite && (
+            <div className="mt-3 border-t border-trait pt-3">
+              <button type="button" onClick={() => nav.ouvrir(<PageObjectif id={securite.id} />)} className="block w-full text-left" aria-label="Détail de la sécurité">
+                <p className="flex items-center justify-between text-[15px] font-semibold text-encre">
+                  <span>🛟 Sécurité</span>
+                  <span className="flex items-center gap-1">{formaterMontant(montantSecurite, principal.devise)}<IconeChevron taille={16} className="text-encre-pale" /></span>
+                </p>
+                <p className="mt-1.5 flex justify-between text-[12px] text-encre-douce">
+                  <span>Part du solde du compte</span><span>{Math.round(partDuSolde(montantSecurite, solde) * 100)} %</span>
+                </p>
+                <Jauge valeur={partDuSolde(montantSecurite, solde)} couleur="bg-bleu" fond="bg-bleu-pale" libelle="Part du solde" />
+                {securite.montantCible ? (<>
+                  <p className="mt-1.5 flex justify-between text-[12px] text-encre-douce">
+                    <span>Objectif {formaterMontant(securite.montantCible, principal.devise)}</span><span>{Math.round((progressionObjectif(montantSecurite, securite.montantCible) ?? 0) * 100)} %</span>
+                  </p>
+                  <Jauge valeur={progressionObjectif(montantSecurite, securite.montantCible) ?? 0} couleur="bg-vert" fond="bg-vert-pale" libelle="Vers l’objectif" />
+                </>) : null}
+              </button>
+              <div className="mt-2.5 flex gap-2">
+                <button type="button" onClick={() => setMouvement('mise_de_cote')} className="min-h-[40px] flex-1 rounded-[10px] bg-fond text-[14px] font-semibold text-bleu active:bg-bleu-pale">+ Ajouter</button>
+                <button type="button" onClick={() => setMouvement('reprise')} className="min-h-[40px] flex-1 rounded-[10px] bg-fond text-[14px] font-semibold text-bleu active:bg-bleu-pale">− Retirer</button>
+              </div>
+              <Mouvement sens={mouvement} surFermer={() => setMouvement(null)} objectif={securite} compte={principal} solde={montantSecurite} />
             </div>
           )}
           {carte && <RembourserCarte ouverte={remboursement} surFermer={() => setRemboursement(false)} carte={carte} compte={principal} du={du} />}

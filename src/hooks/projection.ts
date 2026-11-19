@@ -18,10 +18,9 @@ export function calculerProjection(ctx: ContexteBudget, comptes: Set<string>, av
   const depenseJour = (d: DateISO): number => {
     if (!avecBudget || etat.etat !== 'actif') return 0
     const { jour, bornes, enveloppe } = etat
-    const cote = Math.max(0, etat.resteACote ?? 0) // l'argent « à côté » est supposé dépensé d'ici la fin de la période
-    const parJourCote = d <= bornes.fin ? Math.round(cote / jour.joursRestants) : 0
-    if (d === aujourdhui) return Math.max(0, jour.resteAujourdhui) + parJourCote
-    if (d <= bornes.fin) return Math.max(0, jour.budgetJoursSuivants ?? 0) + parJourCote
+    // le non affecté reste sur le compte (réparti en épargne / sécurité à la fin de la quinzaine) : pas supposé dépensé
+    if (d === aujourdhui) return Math.max(0, jour.resteAujourdhui)
+    if (d <= bornes.fin) return Math.max(0, jour.budgetJoursSuivants ?? 0)
     // périodes futures : le budget par période supposé entièrement dépensé, réparti sur ses jours
     const future = ctx.paie ? periodeCourante(ctx.paie, d) : undefined
     return future ? Math.round(ctx.budgetParPeriode / joursDansPeriode(future)) : Math.round(enveloppe / jour.joursTotal)

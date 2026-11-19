@@ -65,7 +65,7 @@ export function Analyses() {
     }
     return {
       f, precedente, points,
-      resume: resumeFenetre(comptesVue, ctx.operations, objectifs, f, ctx.date),
+      resume: resumeFenetre(comptesVue, ctx.operations, ctx.comptes, f, ctx.date),
       lignes: parCategorie(ctx.operations, vue.comptes, f, precedentes, { chargesFixes }),
       precedentes,
       top: topDepenses(ctx.operations, vue.comptes, f, 5),

@@ -39,7 +39,7 @@ export function revueDuMois(m: Mois, p: {
   const f = fenetre('mois', date, 0)!
   const precedentes = [1, 2, 3].map((k) => fenetre('mois', date, -k)!)
   const comptesBudget = p.comptes.filter((c) => p.budget.has(c.id))
-  const resume = resumeFenetre(comptesBudget, p.operations, p.objectifs, f, p.aujourdhui)
+  const resume = resumeFenetre(comptesBudget, p.operations, p.comptes, f, p.aujourdhui)
   const total = (b: { debut: DateISO; fin: DateISO }) => p.operations
     .filter((o) => (o.type === 'depense' || o.type === 'prelevement_fixe') && p.budget.has(o.compteId) && o.date >= b.debut && o.date <= b.fin)
     .reduce((s, o) => s + o.montant, 0)

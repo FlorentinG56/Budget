@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import { cloturerPeriode, validerPeriode } from '../db/actions'
+import { cloturerPeriode, terminerQuinzaine, validerPeriode } from '../db/actions'
 import { Bouton } from '../components/formulaire'
 import { IconeChevron } from '../components/Icones'
 import { formaterMontant } from '../domain/argent'
-import { affectationAutomatique, depensesParCategorie, depensesParFinancement, joursDansPeriode, nonAffecte, resteACote, versSecuriteEnFin, type Bornes, type Previsions } from '../domain/budget'
+import { depensesParCategorie, depensesParFinancement, joursDansPeriode, nonAffecte, resteACote, type Bornes, type Previsions } from '../domain/budget'
+import { comptesEpargne, projetsEpargne, repartirFinQuinzaine, resteFinQuinzaine, soldeObjectif } from '../domain/epargne'
+import { montantDuCarte, soldeCompte } from '../domain/soldes'
 import { aujourdhui, libelleCourt } from '../domain/dates'
 import type { Devise } from '../domain/types'
-import { useCategories } from '../hooks/donnees'
+import { useCategories, useComptes, useObjectifs, useOperations, useReglages } from '../hooks/donnees'
 import { PageBilan } from './PageBilan'
 import { useBudget, type EtatBudget } from '../hooks/budget'
 import { useNav } from '../nav/Navigation'
@@ -62,7 +64,7 @@ export function CarteBudget({ devise }: { devise: Devise }) {
           {jour.budgetJoursSuivants !== undefined && <Projection jour={jour} devise={devise} />}
           {etat.resteACote !== undefined && (
             <p className="mt-2 flex items-center justify-between rounded-[10px] bg-fond px-3 py-2 text-[14px]">
-              <span className="text-encre">🛍️ À côté du budget</span>
+              <span className="text-encre">🛍️ Non affecté</span>
               <span className={`font-bold ${etat.resteACote < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(etat.resteACote, devise)}</span>
             </p>
           )}
@@ -133,18 +135,14 @@ function Validation({ etat, devise }: { etat: Extract<EtatBudget, { etat: 'a_val
   const { bornes, previsions, proposition, premiere, depenseJusquIci } = etat
   const [texteEnveloppe, setTexteEnveloppe] = useState(versTexteMontant(proposition))
   const enveloppeSaisie = lireMontant(texteEnveloppe)
+  // non affecté : il reste simplement sur le compte, et sera réparti (épargne / sécurité) à la fin de la quinzaine
   const libre = nonAffecte(previsions, enveloppeSaisie ?? proposition)
-  // ce qu'on fait du non affecté : rien n'est choisi d'avance
-  const [choix, setChoix] = useState<null | 'tout' | 'partie' | 'rien'>(null)
-  const [textePartie, setTextePartie] = useState('')
-  const aDecider = libre > 0
-  const epargne = !aDecider || choix === 'rien' ? 0 : choix === 'tout' ? libre : choix === 'partie' ? lireMontant(textePartie) ?? NaN : NaN
   // 1re période (démarrage en cours de route) : on demande ce qu'il reste à dépenser
   const [reste, setReste] = useState(versTexteMontant(Math.max(0, proposition - depenseJusquIci)))
   const enveloppe = premiere ? (lireMontant(reste) ?? NaN) + depenseJusquIci : enveloppeSaisie ?? NaN
 
-  const aCote = aDecider && Number.isFinite(epargne) ? Math.max(0, libre - epargne) : 0
-  const valider = () => validerPeriode({ debut: bornes.debut, fin: bornes.fin, enveloppe, epargne: premiere ? 0 : epargne, report: 0,
+  const aCote = Math.max(0, libre)
+  const valider = () => validerPeriode({ debut: bornes.debut, fin: bornes.fin, enveloppe, epargne: 0, report: 0,
     demarrageLe: premiere ? aujourdhui() : undefined, aCote: premiere ? 0 : aCote })
 
   return (
@@ -176,42 +174,17 @@ function Validation({ etat, devise }: { etat: Extract<EtatBudget, { etat: 'a_val
               <span className={`font-bold ${libre < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(libre, devise)}</span>
             </p>
           </div>
-          {aDecider ? (
-            <div className="pt-2">
-              <p className="text-[15px] font-semibold text-encre">💰 Non affecté prévu : {formaterMontant(libre, devise)}</p>
-              <p className="text-[13px] text-encre-douce">Qu’est-ce qu’on en fait ?</p>
-              <div className="mt-2 flex flex-col gap-1.5" role="radiogroup" aria-label="Que faire du non affecté">
-                {([['tout', `Tout en Sécurité (${formaterMontant(libre, devise)})`], ['partie', 'Une partie…'], ['rien', 'Le laisser sur le compte']] as const).map(([v, l]) => (
-                  <button key={v} type="button" role="radio" aria-checked={choix === v} onClick={() => setChoix(v)}
-                    className={`flex min-h-[44px] items-center gap-2.5 rounded-[12px] px-3 text-left text-[15px] ${choix === v ? 'bg-bleu-pale font-semibold text-bleu-fonce ring-2 ring-bleu' : 'bg-white text-encre shadow-carte'}`}>
-                    <span className={`h-5 w-5 shrink-0 rounded-full border-2 ${choix === v ? 'border-[6px] border-bleu' : 'border-encre-pale'}`} />{l}
-                  </button>
-                ))}
-              </div>
-              {choix === 'partie' && (
-                <div className="mt-2">
-                  <ChampMontant valeur={textePartie} surChange={setTextePartie} devise={devise} libelle="Montant mis de côté" />
-                  {Number.isFinite(epargne) && epargne > libre && <p className="mt-1 text-[12px] text-encre-pale">C’est plus que le non affecté prévu.</p>}
-                </div>
-              )}
-              {(choix === 'partie' || choix === 'rien') && aCote > 0 && (
-                <p className="mt-2 rounded-[10px] bg-fond px-3 py-2 text-[13px] leading-snug text-encre-douce">
-                  🛍️ <b className="text-encre">{formaterMontant(aCote, devise)} à côté du budget</b> : pour un achat prévu (chaussures…), hors budget du jour. Ce qui n’est pas utilisé ira dans Sécurité en fin de période.
-                </p>
-              )}
-            </div>
-          ) : libre < 0 ? (
-            <p className="pt-1 text-[13px] leading-snug text-rouge">Ta paie ne couvre pas les charges et le budget de cette période : le solde du compte baissera de {formaterMontant(-libre, devise)}. Rien à mettre de côté.</p>
-          ) : (
-            <p className="pt-1 text-[13px] text-encre-douce">Rien de non affecté sur cette période.</p>
-          )}
+          {libre < 0 ? (
+            <p className="pt-1 text-[13px] leading-snug text-rouge">Ta paie ne couvre pas les charges et le budget de cette période : le solde du compte baissera de {formaterMontant(-libre, devise)}.</p>
+          ) : libre > 0 ? (
+            <p className="pt-1 text-[13px] leading-snug text-encre-douce">Le non affecté reste sur ton compte. À la fin de la quinzaine, tu choisiras ce que tu épargnes ; le reste ira en sécurité.</p>
+          ) : null}
           {previsions.detailRevenus.some((d) => d.estime) && (
             <p className="text-[12px] leading-snug text-encre-pale">Certains revenus sont estimés (montant habituel) : confirme ta paie pour un calcul exact.</p>
           )}
         </div>
       )}
-      <Bouton className="mt-3" disabled={!Number.isFinite(enveloppe) || (!premiere && !Number.isFinite(epargne))} onClick={() => void valider()}>Valider le budget</Bouton>
-      {!premiere && aDecider && choix === null && <p className="mt-1.5 text-center text-[12px] text-encre-pale">Choisis d’abord ce que tu fais du non affecté.</p>}
+      <Bouton className="mt-3" disabled={!Number.isFinite(enveloppe)} onClick={() => void valider()}>Valider le budget</Bouton>
     </section>
   )
 }
@@ -224,7 +197,6 @@ function Bilan({ etat, devise }: { etat: Extract<EtatBudget, { etat: 'bilan' }>;
   const positif = bilan.ecart > 0
   const fin = ctx ? depensesParFinancement(ctx.operations, ctx.budget, periode.dateDebut, periode.dateFin) : undefined
   const resteCote = ctx ? resteACote(periode, ctx.operations, ctx.budget) : 0
-  const versSec = versSecuriteEnFin(bilan, resteCote)
   const lignes = ctx ? depensesParCategorie(ctx.operations, ctx.budget, periode.dateDebut, periode.dateFin).filter((l) => l.montant > 0).slice(0, 3) : []
   const cats = new Map((categories ?? []).map((c) => [c.id, c]))
   return (
@@ -235,15 +207,15 @@ function Bilan({ etat, devise }: { etat: Extract<EtatBudget, { etat: 'bilan' }>;
         <p className="flex justify-between"><span className="text-encre-douce">Budget</span><span className="font-semibold">{formaterMontant(bilan.enveloppe, devise)}</span></p>
         <p className="flex justify-between"><span className="text-encre-douce">Dépensé</span><span className="font-semibold">{formaterMontant(bilan.depense, devise)}</span></p>
         <p className="flex justify-between border-t border-trait pt-1">
-          <span className="font-semibold text-encre">{positif ? 'Reste → épargne' : bilan.ecart < 0 ? 'Dépassement' : 'Pile dans le budget'}</span>
+          <span className="font-semibold text-encre">{positif ? 'Reste du budget' : bilan.ecart < 0 ? 'Dépassement' : 'Pile dans le budget'}</span>
           <span className={`text-[20px] font-bold ${positif ? 'text-vert' : bilan.ecart < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(Math.abs(bilan.ecart), devise)}</span>
         </p>
       </div>
       {fin && (periode.aCote || fin.aCote > 0) ? (
         <div className="mt-2 space-y-1 border-t border-trait pt-2 text-[15px]">
-          <p className="flex justify-between"><span className="text-encre-douce">🛍️ À côté du budget</span><span className="font-semibold">{formaterMontant(periode.aCote ?? 0, devise)}</span></p>
-          <p className="flex justify-between"><span className="text-encre-douce">Dépensé à côté</span><span className="font-semibold">{formaterMontant(fin.aCote, devise)}</span></p>
-          <p className="flex justify-between"><span className="font-semibold text-encre">{resteCote >= 0 ? 'Reste → épargne' : 'Dépassement'}</span>
+          <p className="flex justify-between"><span className="text-encre-douce">🛍️ Non affecté</span><span className="font-semibold">{formaterMontant(periode.aCote ?? 0, devise)}</span></p>
+          <p className="flex justify-between"><span className="text-encre-douce">Imprévus payés avec le solde</span><span className="font-semibold">{formaterMontant(fin.aCote, devise)}</span></p>
+          <p className="flex justify-between"><span className="font-semibold text-encre">{resteCote >= 0 ? 'Reste' : 'Dépassement'}</span>
             <span className={`font-bold ${resteCote > 0 ? 'text-vert' : resteCote < 0 ? 'text-rouge' : ''}`}>{formaterMontant(Math.abs(resteCote), devise)}</span></p>
         </div>
       ) : null}
@@ -260,14 +232,95 @@ function Bilan({ etat, devise }: { etat: Extract<EtatBudget, { etat: 'bilan' }>;
           })}
         </div>
       )}
-      <div className="mt-3 flex gap-2">
-        <Bouton variante="secondaire" onClick={() => nav.ouvrir(<PageBilan periodeId={periode.id} />)}>Bilan complet</Bouton>
-        <Bouton onClick={() => void cloturerPeriode(periode.id, affectationAutomatique(bilan.ecart), bilan.ecart, versSec.aCote)}>Continuer</Bouton>
-      </div>
-      {versSec.budget + versSec.aCote > 0 && (
-        <p className="mt-2 text-[12px] leading-snug text-encre-pale">En touchant « Continuer », {formaterMontant(versSec.budget + versSec.aCote, devise)} sont rangés dans ton objectif « Sécurité ». Le bilan reste consultable dans l’historique.</p>
-      )}
+      <Bouton className="mt-3" variante="secondaire" onClick={() => nav.ouvrir(<PageBilan periodeId={periode.id} />)}>Bilan complet</Bouton>
+      <FinQuinzaine periodeId={periode.id} dateFin={periode.dateFin} />
     </section>
+  )
+}
+
+/**
+ * Fin de quinzaine (jour de paie) : solde du compte le soir du dernier jour − dû carte − sécurité = reste à décider.
+ * Une part est épargnée (virement vers le compte épargne, à refaire à la banque), le reste va en sécurité.
+ */
+function FinQuinzaine({ periodeId, dateFin }: { periodeId: string; dateFin: string }) {
+  const comptes = useComptes()
+  const operations = useOperations()
+  const objectifs = useObjectifs()
+  const reglages = useReglages()
+  const [texte, setTexte] = useState('')
+  const [projetId, setProjetId] = useState('')
+  const [date, setDate] = useState(aujourdhui())
+  const [enCours, setEnCours] = useState(false)
+  if (!comptes || !operations || !objectifs || !reglages) return null
+  const principal = comptes.find((c) => c.type === 'cheque' && c.inclusBudgetJournalier)
+  if (!principal) return <Bouton className="mt-2" onClick={() => void cloturerPeriode(periodeId, 'aucune', 0)}>Continuer</Bouton>
+  const carte = comptes.find((c) => c.type === 'carte_credit' && c.compteRemboursementId === principal.id)
+  const devise = principal.devise
+  const solde = soldeCompte(principal, operations, dateFin)
+  const du = carte ? Math.max(0, montantDuCarte(carte, operations, dateFin)) : 0
+  const securite = objectifs.find((o) => o.id === reglages.objectifSecuriteId)
+  const dejaSecurite = securite ? soldeObjectif(securite, operations, dateFin) : 0
+  const reste = resteFinQuinzaine(solde, du, dejaSecurite)
+  const compteEpargne = comptesEpargne(comptes).find((c) => c.devise === devise)
+  const projets = compteEpargne ? projetsEpargne(objectifs, comptes).filter((o) => o.compteId === compteEpargne.id) : []
+  const saisie = texte.trim() ? lireMontant(texte) : 0
+  const { epargne, securite: versSecurite } = repartirFinQuinzaine(reste, saisie ?? 0, !!compteEpargne)
+  const tropGrand = saisie !== null && saisie > reste
+  const valider = async () => {
+    setEnCours(true)
+    try {
+      await terminerQuinzaine(periodeId, { compteId: principal.id, reste, epargne, compteEpargneId: compteEpargne?.id, projetId: projetId || undefined, date })
+    } finally { setEnCours(false) }
+  }
+  return (
+    <div className="mt-3 rounded-[12px] bg-fond p-3" aria-label="Fin de quinzaine">
+      <p className="text-[15px] font-semibold text-encre">💰 Fin de quinzaine</p>
+      <div className="mt-1 space-y-0.5 text-[14px]">
+        <p className="flex justify-between"><span className="text-encre-douce">Solde le {court(dateFin)} au soir</span><span className="font-semibold">{formaterMontant(solde, devise)}</span></p>
+        {carte && <p className="flex justify-between"><span className="text-encre-douce">Dû sur la carte</span><span className="font-semibold">{formaterMontant(-du, devise)}</span></p>}
+        <p className="flex justify-between"><span className="text-encre-douce">Sécurité déjà là</span><span className="font-semibold">{formaterMontant(-dejaSecurite, devise)}</span></p>
+        <p className="flex justify-between border-t border-trait pt-1"><span className="font-semibold text-encre">Reste à répartir</span>
+          <span className={`text-[18px] font-bold ${reste > 0 ? 'text-vert' : reste < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(reste, devise)}</span></p>
+      </div>
+      {reste <= 0 ? (
+        <p className="mt-2 text-[13px] leading-snug text-encre-douce">
+          {reste < 0 ? 'Le compte ne couvre pas la carte et la sécurité : rien à répartir cette fois-ci.' : 'Rien à répartir cette fois-ci.'}
+        </p>
+      ) : !compteEpargne ? (
+        <p className="mt-2 text-[13px] leading-snug text-encre-douce">
+          Pas encore de compte épargne : les {formaterMontant(reste, devise)} vont en 🛟 sécurité (ils restent sur {principal.nom}). Pour épargner, crée un compte de type « Épargne » dans Réglages → Comptes.
+        </p>
+      ) : (
+        <div className="mt-2 flex flex-col gap-2">
+          <p className="text-[13px] leading-snug text-encre-douce">Combien veux-tu épargner (vers {compteEpargne.nom}) ? Le reste ira en sécurité.</p>
+          <ChampMontant valeur={texte} surChange={setTexte} devise={devise} libelle={`Épargner (vers ${compteEpargne.nom})`} />
+          {tropGrand && <p className="px-1 text-[12px] text-rouge">C’est plus que le reste à répartir : {formaterMontant(reste, devise)} au maximum.</p>}
+          {projets.length > 0 && (
+            <label className="flex min-h-[46px] items-center justify-between gap-2 rounded-[12px] bg-white px-3 text-[15px] shadow-carte">
+              <span className="text-encre-douce">Projet</span>
+              <select value={projetId} onChange={(e) => setProjetId(e.target.value)} className="min-w-0 bg-transparent text-right text-encre outline-none" aria-label="Projet">
+                <option value="">Aucun</option>
+                {projets.map((o) => <option key={o.id} value={o.id}>{o.nom}</option>)}
+              </select>
+            </label>
+          )}
+          <label className="flex min-h-[46px] items-center justify-between rounded-[12px] bg-white px-3 text-[15px] shadow-carte">
+            <span className="text-encre-douce">Date du virement</span>
+            <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} className="bg-transparent text-right text-encre outline-none" aria-label="Date du virement" />
+          </label>
+          <div className="space-y-0.5 text-[14px]">
+            <p className="flex justify-between"><span className="text-encre-douce">🏦 Épargné</span><span className="font-semibold text-vert">{formaterMontant(epargne, devise)}</span></p>
+            <p className="flex justify-between"><span className="text-encre-douce">🛟 En sécurité (reste sur le compte)</span><span className="font-semibold">{formaterMontant(versSecurite, devise)}</span></p>
+          </div>
+          {epargne > 0 && (
+            <p className="rounded-[10px] bg-white px-3 py-2 text-[13px] leading-snug text-encre">
+              ⚠️ Après validation, <b>fais le virement de {formaterMontant(epargne, devise)}</b> de {principal.nom} vers {compteEpargne.nom} dans l’app de ta banque, pour que les montants restent identiques.
+            </p>
+          )}
+        </div>
+      )}
+      <Bouton className="mt-3" disabled={enCours || saisie === null || tropGrand} onClick={() => void valider()}>{reste > 0 ? 'Valider la répartition' : 'Continuer'}</Bouton>
+    </div>
   )
 }
 

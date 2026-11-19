@@ -47,7 +47,10 @@ export interface Operation {
   partCapital?: Centimes // mensualité de crédit : part qui rembourse le capital
   echeance?: DateISO // opération issue d'une récurrence : date d'échéance prévue (peut différer de la date réelle)
   objectifEpargneId?: string // dépense payée avec l'épargne : retirée de l'objectif, hors budget du jour
-  horsBudget?: boolean // dépense « à côté du budget » : payée avec le non affecté laissé sur le compte, hors budget du jour
+  horsBudget?: boolean // imprévu payé avec le solde du compte (ou la carte) : hors budget du jour
+  epargneCompteId?: string // imprévu payé avec l'épargne : compte épargne d'où vient l'argent (virement lié vers le compte principal)
+  virementLieId?: string // imprévu payé avec l'épargne : virement épargne → compte principal créé avec la dépense
+  lieA?: string // virement créé automatiquement pour une dépense (id de cette dépense)
   creeLe: number // horodatage de saisie
 }
 
@@ -108,6 +111,10 @@ export interface Periode {
   aCote?: Centimes // non affecté laissé sur le compte à la paie, utilisable hors budget du jour
   aCoteVersSecurite?: Centimes // fin de période : reste « à côté » rangé dans Sécurité
   cloturee: boolean
+  finReste?: Centimes // fin de quinzaine : solde du compte − dû carte − sécurité, le soir du dernier jour
+  finEpargne?: Centimes // part épargnée (virement vers le compte épargne)
+  finSecurite?: Centimes // part laissée sur le compte, ajoutée à la sécurité
+  virementEpargneId?: string // virement d'épargne de fin de quinzaine
   affectationFin?: AffectationFin // choix fait au bilan
   montantAffecte?: Centimes // reste (ou déficit) concerné par ce choix
 }
@@ -160,7 +167,8 @@ export interface Reglages {
   dernierMoyenPaiement: 'debit' | 'carte'
   recurrencePaieId?: string // revenu récurrent qui ouvre chaque période du budget
   budgetParPeriode: Centimes // enveloppe fixe proposée à chaque paie (choisie au parcours d'accueil)
-  objectifSecuriteId?: string // objectif qui reçoit l'épargne de la paie et le reste des périodes
+  objectifSecuriteId?: string // enregistrement qui contient la sécurité (argent laissé sur le compte principal)
+  epargneV2?: boolean // nouvelle épargne (sécurité sur l'accueil, projets sur le compte épargne) mise en place
   rappelSauvegardeJours: number // « Dernière sauvegarde il y a X jours » au-delà de ce délai
   parcoursAccueil?: 'en_cours' | 'termine' // premier lancement d'un nouvel utilisateur
   revuesVues?: string[] // revues de fin de mois déjà ouvertes ('AAAA-MM')

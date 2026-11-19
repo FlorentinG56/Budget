@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useState } from 'react'
-import { ajouterMouvement, enregistrerObjectif, supprimerMouvement } from '../db/actions'
+import { ajouterMouvement, convertirObjectif, enregistrerObjectif, supprimerMouvement } from '../db/actions'
 import { db } from '../db/db'
 import { Feuille } from '../components/Feuille'
 import { Bouton, Champ, Choix, Groupe, Interrupteur, Saisie } from '../components/formulaire'
@@ -9,7 +9,7 @@ import { Ecran, TitreSection } from '../components/ui'
 import { ChampMontant, lireMontant, versTexteMontant } from '../budget/ChampMontant'
 import { formaterMontant } from '../domain/argent'
 import { aujourdhui, libelleCourt } from '../domain/dates'
-import { deplacerObjectif, historiqueObjectif, ordonnerObjectifs, parMoisPourAtteindre, progressionObjectif, rythmeObjectif, soldeObjectif, totalParDevise, type Rythme } from '../domain/epargne'
+import { comptesEpargne, deplacerObjectif, epargneNonRepartie, historiqueObjectif, objectifsAConvertir, ordonnerObjectifs, parMoisPourAtteindre, progressionObjectif, projetsEpargne, rythmeObjectif, soldeObjectif, totalEpargne, type Rythme } from '../domain/epargne'
 import { dettes, totalDettes } from '../domain/dettes'
 import { useRecurrences } from '../hooks/donnees'
 import { ListeRecurrences } from './reglages/Recurrences'
@@ -21,6 +21,8 @@ import type { Compte, ObjectifEpargne } from '../domain/types'
 import { indexer, useComptes, useObjectifs, useOperations, useReglages } from '../hooks/donnees'
 import { Page, useNav } from '../nav/Navigation'
 import { EditionOperation } from './operations/EditionOperation'
+import { ListeComptes } from './reglages/Comptes'
+import { PageSauvegarde } from './reglages/Sauvegarde'
 
 function Barre({ valeur }: { valeur: number }) {
   return (
@@ -39,28 +41,30 @@ export function Epargne() {
   const [organiser, setOrganiser] = useState(false)
   if (!objectifs || !comptes || !operations || !reglages) return <Ecran titre="Épargne"><div /></Ecran>
 
+  const date = aujourdhui()
   const mapComptes = indexer(comptes)
-  const actifs = ordonnerObjectifs(objectifs.filter((o) => !o.archive && mapComptes.has(o.compteId)), reglages.objectifSecuriteId)
+  const epargnes = comptesEpargne(comptes)
+  const projets = ordonnerObjectifs(projetsEpargne(objectifs, comptes))
   const deplacer = async (id: string, sens: -1 | 1) => {
-    const ordre = deplacerObjectif(actifs, id, sens)
+    const ordre = deplacerObjectif(projets, id, sens)
     await db.transaction('rw', db.objectifs, async () => { for (const [k, v] of ordre) await db.objectifs.update(k, { ordre: v }) })
   }
-  const archives = objectifs.filter((o) => o.archive)
-  const totaux = totalParDevise(objectifs, operations, comptes)
-  // tant qu'il n'y a pas d'autre objectif que Sécurité : proposer d'enregistrer l'épargne déjà présente
-  const proposerEpargneExistante = !objectifs.some((o) => o.id !== reglages.objectifSecuriteId)
+  // projets terminés (et anciens objectifs archivés) ; la sécurité n'est plus ici (elle est sur l'accueil)
+  const termines = objectifs.filter((o) => o.archive && o.id !== reglages.objectifSecuriteId && mapComptes.has(o.compteId))
+  const totaux = totalEpargne(comptes, operations, date)
+  const nonReparti = epargneNonRepartie(comptes, objectifs, operations, date)
 
-  const ligne = (o: ObjectifEpargne, i: number) => {
+  const ligne = (o: ObjectifEpargne, i: number, liste: ObjectifEpargne[]) => {
     const compte = mapComptes.get(o.compteId)!
     const solde = soldeObjectif(o, operations)
     const prog = progressionObjectif(solde, o.montantCible)
-    const rythme = rythmeObjectif(o, solde, aujourdhui())
-    if (organiser) return (
+    const rythme = rythmeObjectif(o, solde, date)
+    if (organiser && !o.archive) return (
       <div key={o.id} className="flex min-h-[56px] items-center gap-2 px-4 py-2">
-        <span className="min-w-0 flex-1 truncate text-[16px] font-medium text-encre">{o.id === reglages.objectifSecuriteId ? '🛟 ' : '🐷 '}{o.nom}</span>
+        <span className="min-w-0 flex-1 truncate text-[16px] font-medium text-encre">🎯 {o.nom}</span>
         <button type="button" aria-label={`Monter ${o.nom}`} disabled={i === 0} onClick={() => void deplacer(o.id, -1)}
           className="flex h-11 w-11 items-center justify-center rounded-full bg-fond text-[18px] text-bleu active:bg-bleu-pale disabled:opacity-30">↑</button>
-        <button type="button" aria-label={`Descendre ${o.nom}`} disabled={i === actifs.length - 1} onClick={() => void deplacer(o.id, 1)}
+        <button type="button" aria-label={`Descendre ${o.nom}`} disabled={i === liste.length - 1} onClick={() => void deplacer(o.id, 1)}
           className="flex h-11 w-11 items-center justify-center rounded-full bg-fond text-[18px] text-bleu active:bg-bleu-pale disabled:opacity-30">↓</button>
       </div>
     )
@@ -68,8 +72,8 @@ export function Epargne() {
       <button key={o.id} type="button" onClick={() => nav.ouvrir(<PageObjectif id={o.id} />)} className="block w-full px-4 py-3 text-left active:bg-fond">
         <span className="flex items-center gap-3">
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[16px] font-medium text-encre">{o.id === reglages.objectifSecuriteId ? '🛟 ' : '🐷 '}{o.nom}</span>
-            <span className="block truncate text-[13px] text-encre-pale">{compte.nom}{o.dateCible ? ` · pour le ${libelleCourt(o.dateCible)}` : ''}</span>
+            <span className="block truncate text-[16px] font-medium text-encre">{o.archive ? '✅ ' : '🎯 '}{o.nom}</span>
+            <span className="block truncate text-[13px] text-encre-pale">{compte.nom}{o.dateCible && !o.archive ? ` · pour le ${libelleCourt(o.dateCible)}` : ''}</span>
           </span>
           <span className="text-right">
             <span className={`block text-[17px] font-bold ${solde < 0 ? 'text-rouge' : 'text-encre'}`}>{formaterMontant(solde, compte.devise)}</span>
@@ -78,99 +82,119 @@ export function Epargne() {
           <IconeChevron taille={18} className="text-encre-pale" />
         </span>
         {prog !== undefined && <span className="mt-2 block"><Barre valeur={prog} /></span>}
-        <TexteRythme rythme={rythme} devise={compte.devise} />
+        {!o.archive && <TexteRythme rythme={rythme} devise={compte.devise} />}
       </button>
     )
   }
 
   return (
-    <Ecran titre="Épargne" action={
-      <button type="button" onClick={() => nav.ouvrir(<EditionObjectif />)} className="min-h-[44px] pb-1 text-[17px] font-semibold text-bleu">Ajouter</button>
-    }>
-      <section className="rounded-carte bg-white p-4 shadow-carte">
-        <p className="text-[14px] font-medium text-encre-douce">Total de l’épargne</p>
-        <p className="text-[30px] font-bold leading-tight tracking-tight text-vert">
-          {totaux.size === 0 ? formaterMontant(0, 'CAD') : [...totaux].map(([d, t]) => formaterMontant(t, d)).join(' + ')}
-        </p>
-        <p className="mt-1 text-[13px] leading-snug text-encre-pale">L’épargne est virtuelle : elle réserve une partie du solde de chaque compte, l’argent ne bouge pas.</p>
-      </section>
+    <Ecran titre="Épargne" action={epargnes.length > 0 ? (
+      <button type="button" onClick={() => nav.ouvrir(<EditionObjectif />)} className="min-h-[44px] pb-1 text-[17px] font-semibold text-bleu">Nouveau projet</button>
+    ) : undefined}>
+      <ConversionEpargne />
 
-      {proposerEpargneExistante && <ProposerEpargneExistante comptes={comptes.filter((c) => c.type !== 'carte_credit')} />}
+      {epargnes.length === 0 ? (
+        <button type="button" onClick={() => nav.ouvrir(<ListeComptes />)} className="flex items-center gap-3 rounded-carte border border-bleu/20 bg-bleu-pale p-4 text-left active:opacity-80">
+          <span className="text-[26px]" aria-hidden="true">🏦</span>
+          <span className="flex-1">
+            <span className="block text-[16px] font-semibold text-bleu-fonce">Crée ton compte épargne pour commencer</span>
+            <span className="block text-[14px] leading-snug text-encre-douce">Réglages → Comptes → Ajouter, type « Épargne », avec son solde réel. Tu pourras ensuite épargner à chaque fin de quinzaine et créer des projets.</span>
+          </span>
+          <IconeChevron taille={20} className="text-bleu" />
+        </button>
+      ) : (<>
+        <section className="rounded-carte bg-white p-4 shadow-carte">
+          <p className="text-[14px] font-medium text-encre-douce">Total épargné</p>
+          <p className="text-[30px] font-bold leading-tight tracking-tight text-vert">
+            {totaux.size === 0 ? formaterMontant(0, 'CAD') : [...totaux].map(([d, t]) => formaterMontant(t, d)).join(' + ')}
+          </p>
+          <div className="mt-1 space-y-0.5 text-[14px]">
+            {epargnes.map((c) => (
+              <p key={c.id} className="flex justify-between text-encre-douce"><span className="truncate">{c.nom}</span><span>{formaterMontant(soldeCompte(c, operations, date), c.devise)}</span></p>
+            ))}
+            {projets.length > 0 && [...nonReparti].map(([d, t]) => (
+              <p key={d} className="flex justify-between border-t border-trait pt-1 font-medium text-encre"><span>Pas encore dans un projet</span>
+                <span className={t < 0 ? 'text-rouge' : ''}>{formaterMontant(t, d)}</span></p>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[12px] leading-snug text-encre-pale">C’est le solde réel de ton compte épargne. Les projets répartissent ce total, virtuellement : ils ne changent aucun compte.</p>
+        </section>
 
-      {actifs.length > 0 && (<>
         <div className="flex items-end justify-between">
-          <TitreSection>Objectifs</TitreSection>
-          {actifs.length > 1 && (
+          <TitreSection>Projets</TitreSection>
+          {projets.length > 1 && (
             <button type="button" onClick={() => setOrganiser(!organiser)} className="min-h-[40px] px-1 text-[15px] font-semibold text-bleu">{organiser ? 'Terminé' : 'Organiser'}</button>
           )}
         </div>
-        <Groupe>{actifs.map(ligne)}</Groupe>
+        {projets.length > 0 ? <Groupe>{projets.map((o, i) => ligne(o, i, projets))}</Groupe> : (
+          <p className="px-1 text-[15px] leading-snug text-encre-douce">Aucun projet. Touche « Nouveau projet » pour en créer un (PS5, voyage…).</p>
+        )}
       </>)}
 
       <SectionDettes />
 
-      <SoldesDisponibles comptes={comptes} objectifs={objectifs} />
-
-      {archives.length > 0 && (<><TitreSection>Archivés</TitreSection><Groupe>{archives.filter((o) => mapComptes.has(o.compteId)).map(ligne)}</Groupe></>)}
+      {termines.length > 0 && (<><TitreSection>Projets terminés</TitreSection><Groupe>{termines.map((o, i) => ligne(o, i, termines))}</Groupe></>)}
     </Ecran>
   )
 }
 
-/** Sur chaque compte qui a de l'épargne : solde, dont épargne réservée, disponible réel. */
-function SoldesDisponibles({ comptes, objectifs }: { comptes: Compte[]; objectifs: ObjectifEpargne[] }) {
-  const operations = useOperations() ?? []
-  const date = aujourdhui()
-  const lignes = comptes
-    .map((c) => ({ c, solde: soldeCompte(c, operations, date), reserve: objectifs.filter((o) => o.compteId === c.id && !o.archive).reduce((s, o) => s + soldeObjectif(o, operations), 0) }))
-    .filter((l) => l.reserve !== 0)
-  if (lignes.length === 0) return null
+/**
+ * Conversion, une seule fois, des anciens objectifs (qui réservaient une partie du compte courant) :
+ * pour chacun, « Ajouter à la sécurité » ou « Archiver ». Sauvegarde proposée avant ; rien n'est fait sans validation.
+ */
+export function ConversionEpargne() {
+  const nav = useNav()
+  const objectifs = useObjectifs()
+  const comptes = useComptes()
+  const operations = useOperations()
+  const reglages = useReglages()
+  const [choix, setChoix] = useState<Record<string, 'securite' | 'archiver'>>({})
+  const [enCours, setEnCours] = useState(false)
+  if (!objectifs || !comptes || !operations || !reglages) return null
+  const liste = objectifsAConvertir(objectifs, comptes, reglages.objectifSecuriteId)
+  if (liste.length === 0) return null
+  const securite = objectifs.find((o) => o.id === reglages.objectifSecuriteId)
+  const mapComptes = indexer(comptes)
+  const complet = liste.every((o) => choix[o.id])
   return (
-    <>
-      <TitreSection>Disponible réel par compte</TitreSection>
-      <Groupe>
-        {lignes.map(({ c, solde, reserve }) => (
-          <div key={c.id} className="space-y-0.5 px-4 py-3 text-[15px]">
-            <p className="font-medium text-encre">{c.nom}</p>
-            <p className="flex justify-between text-encre-douce"><span>Solde</span><span>{formaterMontant(solde, c.devise)}</span></p>
-            <p className="flex justify-between text-encre-douce"><span>dont épargne réservée</span><span>{formaterMontant(-reserve, c.devise)}</span></p>
-            <p className="flex justify-between font-semibold"><span>Disponible réel</span>
-              <span className={solde - reserve < 0 ? 'text-rouge' : 'text-encre'}>{formaterMontant(solde - reserve, c.devise)}</span></p>
-          </div>
-        ))}
-      </Groupe>
-    </>
-  )
-}
-
-function ProposerEpargneExistante({ comptes }: { comptes: Compte[] }) {
-  const [compteId, setCompteId] = useState(comptes[0]?.id ?? '')
-  const [nom, setNom] = useState('Épargne')
-  const [texte, setTexte] = useState('')
-  const montant = lireMontant(texte)
-  const compte = comptes.find((c) => c.id === compteId)
-  if (!compte) return null
-  return (
-    <section className="rounded-carte border border-bleu/20 bg-bleu-pale p-4">
-      <p className="text-[16px] font-semibold text-bleu-fonce">💰 Tu as déjà de l’épargne sur un compte ?</p>
-      <p className="mt-1 text-[14px] leading-snug text-encre-douce">Indique quelle part du solde est de l’épargne : elle sera enregistrée dans un objectif, et retirée de ton disponible.</p>
-      <div className="mt-2 flex flex-col gap-2">
-        <label className="relative flex min-h-[46px] items-center justify-between rounded-[12px] bg-white px-3 text-[16px] shadow-carte">
-          <span className="text-encre-douce">Compte</span>
-          <span className="max-w-[60%] truncate font-medium text-encre">{compte.nom}</span>
-          <select value={compteId} onChange={(e) => setCompteId(e.target.value)} className="absolute inset-0 opacity-0" aria-label="Compte de l’épargne déjà présente">
-            {comptes.map((c) => <option key={c.id} value={c.id}>{c.nom} ({c.devise})</option>)}
-          </select>
-        </label>
-        <input value={nom} onChange={(e) => setNom(e.target.value)} aria-label="Nom de l’objectif" placeholder="Nom de l’objectif"
-          className="min-h-[46px] rounded-[12px] bg-white px-3 text-[16px] shadow-carte outline-none placeholder:text-encre-pale" />
-        <div className="flex gap-2">
-          <div className="flex-1"><ChampMontant valeur={texte} surChange={setTexte} devise={compte.devise} libelle="Épargne déjà présente" /></div>
-          <Bouton className="!w-auto" disabled={!montant || !nom.trim()} onClick={async () => {
-            const o = await enregistrerObjectif({ nom: nom.trim(), compteId: compte.id })
-            if (montant) await ajouterMouvement(o.id, { date: aujourdhui(), montant, sens: 'mise_de_cote', note: 'Épargne déjà présente' })
-          }}>Créer</Bouton>
-        </div>
+    <section className="rounded-carte border border-bleu/20 bg-bleu-pale p-4" aria-label="Mise à jour de l’épargne">
+      <p className="text-[16px] font-semibold text-bleu-fonce">🔄 Mise à jour de l’épargne</p>
+      <p className="mt-1 text-[14px] leading-snug text-encre-douce">
+        La sécurité est maintenant sur l’accueil, et l’épargne correspond à ton vrai compte épargne. Que faire de tes anciens objectifs ?
+      </p>
+      <button type="button" onClick={() => nav.ouvrir(<PageSauvegarde />)} className="mt-2 min-h-[44px] w-full rounded-[12px] bg-white text-[15px] font-semibold text-bleu shadow-carte active:bg-fond">
+        💾 D’abord, faire une sauvegarde
+      </button>
+      <p className="mt-1 text-center text-[12px] text-encre-pale">
+        Dernière sauvegarde : {reglages.derniereSauvegarde ? libelleCourt(new Date(reglages.derniereSauvegarde).toISOString().slice(0, 10)) : 'jamais'}
+      </p>
+      <div className="mt-2 space-y-2">
+        {liste.map((o) => {
+          const compte = mapComptes.get(o.compteId)
+          const solde = soldeObjectif(o, operations)
+          const versSecurite = !!securite && securite.compteId === o.compteId
+          return (
+            <div key={o.id} className="rounded-[12px] bg-white p-3 shadow-carte">
+              <p className="flex justify-between text-[15px]"><span className="font-medium text-encre">{o.nom}</span>
+                <span className="font-semibold">{compte ? formaterMontant(solde, compte.devise) : ''}</span></p>
+              <p className="text-[12px] text-encre-pale">{compte?.nom}</p>
+              <div className="mt-2 flex gap-2" role="radiogroup" aria-label={`Que faire de ${o.nom}`}>
+                {versSecurite && (
+                  <button type="button" role="radio" aria-checked={choix[o.id] === 'securite'} onClick={() => setChoix({ ...choix, [o.id]: 'securite' })}
+                    className={`min-h-[40px] flex-1 rounded-[10px] text-[14px] font-semibold ${choix[o.id] === 'securite' ? 'bg-bleu text-white' : 'bg-fond text-encre'}`}>Ajouter à la sécurité</button>
+                )}
+                <button type="button" role="radio" aria-checked={choix[o.id] === 'archiver'} onClick={() => setChoix({ ...choix, [o.id]: 'archiver' })}
+                  className={`min-h-[40px] flex-1 rounded-[10px] text-[14px] font-semibold ${choix[o.id] === 'archiver' ? 'bg-bleu text-white' : 'bg-fond text-encre'}`}>Archiver</button>
+              </div>
+            </div>
+          )
+        })}
       </div>
+      <Bouton className="mt-3" disabled={!complet || enCours} onClick={async () => {
+        setEnCours(true)
+        try { for (const o of liste) await convertirObjectif(o.id, choix[o.id]) } finally { setEnCours(false) }
+      }}>Valider</Bouton>
+      <p className="mt-1 text-[12px] leading-snug text-encre-pale">Un objectif archivé garde son historique (onglet Épargne, « Projets terminés »).</p>
     </section>
   )
 }
@@ -210,13 +234,16 @@ export function PageObjectif({ id }: { id: string }) {
           </div>
         ) : null}
         <div className="mt-3 flex gap-2">
-          <Bouton onClick={() => setMouvement('mise_de_cote')}>Mettre de côté</Bouton>
-          <Bouton variante="secondaire" onClick={() => setMouvement('reprise')}>Reprendre</Bouton>
+          <Bouton disabled={objectif.archive} onClick={() => setMouvement('mise_de_cote')}>{securite ? 'Ajouter' : 'Mettre de côté'}</Bouton>
+          <Bouton variante="secondaire" disabled={objectif.archive} onClick={() => setMouvement('reprise')}>{securite ? 'Retirer' : 'Reprendre'}</Bouton>
         </div>
       </section>
+      {!securite && (
+        <p className="px-1 text-[13px] leading-snug text-encre-pale">Projet virtuel : il répartit le total de ton compte épargne, aucun compte ne bouge quand tu y mets ou reprends de l’argent.</p>
+      )}
       {securite && (
         <p className="px-1 text-[13px] leading-snug text-encre-pale">
-          Reçoit automatiquement ce que tu mets de côté à la paie et le reste de chaque période. Pour un imprévu, saisis la dépense puis choisis « Payé avec l’épargne » : elle est retirée d’ici sans toucher ton budget du jour.
+          Argent laissé sur {compte.nom} pour les imprévus. Il augmente à chaque fin de quinzaine (ce que tu n’épargnes pas) ou quand tu l’ajoutes à la main. Pour un imprévu, saisis la dépense puis choisis « Payé avec la sécurité » : elle est retirée d’ici sans toucher ton budget du jour.
         </p>
       )}
 
@@ -243,17 +270,18 @@ export function PageObjectif({ id }: { id: string }) {
   )
 }
 
-function Mouvement({ sens, surFermer, objectif, compte, solde }: { sens: null | 'mise_de_cote' | 'reprise'; surFermer: () => void; objectif: ObjectifEpargne; compte: Compte; solde: number }) {
+export function Mouvement({ sens, surFermer, objectif, compte, solde }: { sens: null | 'mise_de_cote' | 'reprise'; surFermer: () => void; objectif: ObjectifEpargne; compte: Compte; solde: number }) {
   const [texte, setTexte] = useState('')
   const [note, setNote] = useState('')
   const [date, setDate] = useState(aujourdhui())
   useEffect(() => { if (sens) { setTexte(''); setNote(''); setDate(aujourdhui()) } }, [sens])
   const montant = lireMontant(texte)
   return (
-    <Feuille ouverte={sens !== null} surFermer={surFermer} titre={sens === 'reprise' ? 'Reprendre' : 'Mettre de côté'}>
+    <Feuille ouverte={sens !== null} surFermer={surFermer} titre={`${objectif.nom} : ${sens === 'reprise' ? 'retirer' : 'ajouter'}`}>
       <p className="mb-3 text-[15px] leading-snug text-encre-douce">
         {sens === 'reprise'
           ? `L’argent redevient disponible sur ${compte.nom}. Disponible dans « ${objectif.nom} » : ${formaterMontant(solde, compte.devise)}.`
+          : compte.type === 'epargne' ? `Attribue une partie de ton épargne à « ${objectif.nom} ». C’est virtuel : aucun compte ne bouge.`
           : `Réserve une partie du solde de ${compte.nom}. L’argent reste sur le compte.`}
       </p>
       <div className="flex flex-col gap-2">
@@ -264,12 +292,12 @@ function Mouvement({ sens, surFermer, objectif, compte, solde }: { sens: null | 
           <span className="text-encre-douce">Date</span>
           <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} className="bg-transparent text-right text-encre outline-none" />
         </label>
-        {sens === 'reprise' && montant !== null && montant > solde && <p className="px-1 text-[13px] text-rouge">C’est plus que l’épargne disponible dans cet objectif.</p>}
+        {sens === 'reprise' && montant !== null && montant > solde && <p className="px-1 text-[13px] text-rouge">C’est plus que le montant de « {objectif.nom} ».</p>}
         <Bouton disabled={!montant} onClick={async () => {
           if (!montant || !sens) return
           await ajouterMouvement(objectif.id, { date, montant, sens, note: note.trim() || undefined })
           surFermer()
-        }}>{sens === 'reprise' ? 'Reprendre' : 'Mettre de côté'}</Bouton>
+        }}>{sens === 'reprise' ? 'Retirer' : 'Ajouter'}</Bouton>
       </div>
     </Feuille>
   )
@@ -280,6 +308,7 @@ export function EditionObjectif({ id }: { id?: string }) {
   const existant = useLiveQuery(async () => (id ? (await db.objectifs.get(id)) ?? null : null), [id])
   const comptes = useComptes()
   const operations = useOperations()
+  const reglages = useReglages()
   const [nom, setNom] = useState('')
   const [compteId, setCompteId] = useState('')
   const [cible, setCible] = useState('')
@@ -290,23 +319,25 @@ export function EditionObjectif({ id }: { id?: string }) {
     setNom(existant.nom); setCompteId(existant.compteId); setCible(existant.montantCible ? versTexteMontant(existant.montantCible) : '')
     setAvecDate(!!existant.dateCible); setDateCible(existant.dateCible ?? '')
   }, [existant?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-  if ((id && existant === undefined) || !comptes || !operations) return <Page titre="Objectif"><div /></Page>
+  if ((id && existant === undefined) || !comptes || !operations || !reglages) return <Page titre="Projet"><div /></Page>
 
-  const possibles = comptes.filter((c) => c.type !== 'carte_credit')
+  const estSecurite = !!existant && existant.id === reglages.objectifSecuriteId
+  // un projet vit sur un compte épargne (un ancien objectif garde son compte)
+  const possibles = comptes.filter((c) => c.type === 'epargne' || c.id === existant?.compteId)
   const compte = compteId || possibles[0]?.id || ''
-  const aDeLHistorique = !!existant && (existant.mouvements.length > 0 || operations.some((o) => o.objectifEpargneId === existant.id))
+  const aDeLHistorique = estSecurite || !!existant && (existant.mouvements.length > 0 || operations.some((o) => o.objectifEpargneId === existant.id))
   const valeurCible = cible.trim() ? lireMontant(cible) : undefined
   const valide = nom.trim() !== '' && !!compte && valeurCible !== null && (!avecDate || dateCible !== '')
 
   return (
-    <Page titre={existant ? existant.nom : 'Nouvel objectif'} action={
+    <Page titre={existant ? existant.nom : 'Nouveau projet'} action={
       <button type="button" disabled={!valide} onClick={async () => {
         await enregistrerObjectif({ id: existant?.id, nom: nom.trim(), compteId: compte, montantCible: valeurCible ?? undefined, dateCible: avecDate ? dateCible : undefined })
         nav.retour()
       }} className="min-h-[44px] px-1 text-[17px] font-semibold text-bleu disabled:opacity-40">Enregistrer</button>
     }>
       <Groupe>
-        <Champ libelle="Nom"><Saisie value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Ex. Voyage au Japon" /></Champ>
+        <Champ libelle="Nom"><Saisie value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Ex. PS5, voyage au Japon" /></Champ>
         <Champ libelle="Compte" aide={aDeLHistorique ? 'Non modifiable : l’objectif a déjà des mouvements' : 'La devise suit le compte'}>
           {aDeLHistorique ? <span className="text-[17px] text-encre-douce">{comptes.find((c) => c.id === compte)?.nom}</span> : (
             <Choix value={compte} onChange={(e) => setCompteId(e.target.value)}>
@@ -323,12 +354,12 @@ export function EditionObjectif({ id }: { id?: string }) {
         </div>
         {avecDate && <Champ libelle="Pour le"><Saisie type="date" value={dateCible} min={aujourdhui()} onChange={(e) => setDateCible(e.target.value)} /></Champ>}
       </Groupe>
-      {existant && (
+      {existant && !estSecurite && (
         <Bouton variante={existant.archive ? 'secondaire' : 'danger'} onClick={async () => { await db.objectifs.update(existant.id, { archive: !existant.archive }); nav.retour() }}>
-          {existant.archive ? 'Réactiver l’objectif' : 'Archiver l’objectif'}
+          {existant.archive ? 'Réactiver le projet' : 'Archiver (projet terminé)'}
         </Bouton>
       )}
-      {existant && !existant.archive && <p className="px-1 text-[13px] text-encre-pale">Un objectif archivé ne réserve plus d’argent ; son historique est conservé.</p>}
+      {existant && !existant.archive && !estSecurite && <p className="px-1 text-[13px] text-encre-pale">Un projet archivé reste visible dans « Projets terminés » avec son historique ; il ne compte plus dans la répartition de ton épargne.</p>}
     </Page>
   )
 }

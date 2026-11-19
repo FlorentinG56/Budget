@@ -4,7 +4,7 @@ import { periodeCourante, type Bornes } from './budget'
 import { versISO } from './dates'
 import { lendemain, veille } from './recurrences'
 import { effetSurCompte, soldeCompte } from './soldes'
-import type { Centimes, Compte, DateISO, ObjectifEpargne, Operation, Recurrence } from './types'
+import type { Centimes, Compte, DateISO, Operation, Recurrence } from './types'
 
 /**
  * Analyses (cahier des charges, « Analyses ») : par semaine (lundi → dimanche), par période de paie, par mois.
@@ -67,12 +67,13 @@ export interface Resume {
   revenus: Centimes
   chargesFixes: Centimes
   depensesQuotidien: Centimes
-  epargne: Centimes // mis de côté − repris sur les objectifs de ces comptes
+  epargne: Centimes // virements de ces comptes vers les comptes épargne − retraits de l'épargne vers ces comptes
   soldeFin: Centimes
 }
 
-export function resumeFenetre(comptes: Compte[], operations: Operation[], objectifs: ObjectifEpargne[], f: Bornes, aujourdhui: DateISO): Resume {
+export function resumeFenetre(comptes: Compte[], operations: Operation[], tousComptes: Compte[], f: Bornes, aujourdhui: DateISO): Resume {
   const ids = new Set(comptes.map((c) => c.id))
+  const epargne = new Set(tousComptes.filter((c) => c.type === 'epargne').map((c) => c.id))
   const r: Resume = { revenus: 0, chargesFixes: 0, depensesQuotidien: 0, epargne: 0, soldeFin: 0 }
   for (const op of operations) {
     if (op.date < f.debut || op.date > f.fin || !ids.has(op.compteId)) continue
@@ -80,9 +81,10 @@ export function resumeFenetre(comptes: Compte[], operations: Operation[], object
     else if (op.type === 'prelevement_fixe') r.chargesFixes += op.montant
     else if (op.type === 'depense') r.depensesQuotidien += op.montant
   }
-  for (const o of objectifs) {
-    if (!ids.has(o.compteId)) continue
-    for (const m of o.mouvements) if (m.date >= f.debut && m.date <= f.fin) r.epargne += m.sens === 'mise_de_cote' ? m.montant : -m.montant
+  for (const op of operations) {
+    if (op.type !== 'virement' || op.date < f.debut || op.date > f.fin || !op.compteDestinationId) continue
+    if (ids.has(op.compteId) && epargne.has(op.compteDestinationId) && !ids.has(op.compteDestinationId)) r.epargne += op.montant
+    if (epargne.has(op.compteId) && ids.has(op.compteDestinationId) && !ids.has(op.compteId)) r.epargne -= op.montantRecu ?? op.montant
   }
   const fin = f.fin < aujourdhui ? f.fin : aujourdhui
   r.soldeFin = comptes.reduce((s, c) => s + soldeCompte(c, operations, fin), 0)
