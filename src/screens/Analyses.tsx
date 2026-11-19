@@ -15,6 +15,8 @@ import type { Categorie, Devise } from '../domain/types'
 import { useContexteBudget } from '../hooks/budget'
 import { indexer, useCategories, useObjectifs } from '../hooks/donnees'
 import { calculerProjection } from '../hooks/projection'
+import { suiviBudgets } from '../domain/budgetsCategories'
+import { SuiviBudgets } from '../components/SuiviBudgets'
 import { useNav } from '../nav/Navigation'
 import { EditionOperation } from './operations/EditionOperation'
 
@@ -108,6 +110,14 @@ export function Analyses() {
         )}
         <Resume resume={donnees.resume} devise={vue.devise} enCours={donnees.f.fin >= ctx.date} />
         <CourbeSolde points={donnees.points} devise={vue.devise} />
+
+        {g === 'mois' && vue.budget && (() => {
+          const suivi = suiviBudgets(categories, ctx.operations, vue.comptes, donnees.f.debut)
+          return suivi.length > 0 && (<>
+            <TitreSection>Budgets du mois</TitreSection>
+            <SuiviBudgets suivi={suivi} devise={vue.devise} />
+          </>)
+        })()}
 
         <div className="flex items-end justify-between">
           <TitreSection>Dépenses par catégorie</TitreSection>

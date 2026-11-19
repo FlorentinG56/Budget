@@ -86,6 +86,7 @@ export interface Categorie {
   parentId?: string
   ordre: number
   archivee: boolean
+  budgetMensuel?: Centimes // catégorie principale : budget du mois (comptes du budget du jour), facultatif
 }
 
 export interface AjoutEnveloppe {

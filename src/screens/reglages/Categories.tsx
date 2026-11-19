@@ -1,3 +1,4 @@
+import { analyserMontant } from '../../domain/argent'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useState } from 'react'
 import { enregistrerCategorie } from '../../db/actions'
@@ -23,7 +24,7 @@ export function ListeCategories() {
         className="flex min-h-[54px] w-full items-center gap-3 px-4 py-2 text-left active:bg-fond">
         <span className="flex h-9 w-9 items-center justify-center rounded-full text-[19px]" style={{ background: `${c.couleur}22` }}>{c.icone}</span>
         <span className="min-w-0 flex-1 truncate text-[16px] text-encre">{c.nom}</span>
-        <span className="text-[14px] text-encre-pale">{nb > 0 ? `${nb} sous-cat.` : ''}</span>
+        <span className="text-right text-[13px] text-encre-pale">{c.budgetMensuel ? <span className="block font-semibold text-encre-douce">{(c.budgetMensuel / 100).toLocaleString('fr-FR')} /mois</span> : null}{nb > 0 ? `${nb} sous-cat.` : ''}</span>
         <IconeChevron taille={18} className="text-encre-pale" />
       </button>
     )
@@ -48,18 +49,22 @@ export function EditionCategorie({ id }: { id?: string }) {
   const [icone, setIcone] = useState('📦')
   const [couleur, setCouleur] = useState('#2F6FED')
   const [nouvelleSous, setNouvelleSous] = useState('')
+  const [budget, setBudget] = useState('')
 
   useEffect(() => {
     if (!existante) return
     setNom(existante.nom); setIcone(existante.icone); setCouleur(existante.couleur)
+    setBudget(existante.budgetMensuel ? (existante.budgetMensuel / 100).toFixed(2).replace('.', ',') : '')
   }, [existante?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (id && existante === undefined) return <Page titre="Catégorie"><div /></Page>
+  const valeurBudget = budget.trim() ? analyserMontant(budget) : 0
   const sous = (categories ?? []).filter((c) => c.parentId === id).sort((a, b) => a.ordre - b.ordre)
 
   const enregistrer = async () => {
-    if (!nom.trim()) return
-    await enregistrerCategorie({ ...(existante ?? { archivee: false }), id: existante?.id, ordre: existante?.ordre, nom: nom.trim(), icone, couleur })
+    if (!nom.trim() || valeurBudget === null) return
+    await enregistrerCategorie({ ...(existante ?? { archivee: false }), id: existante?.id, ordre: existante?.ordre, nom: nom.trim(), icone, couleur,
+      budgetMensuel: valeurBudget || undefined })
     // les sous-catégories suivent la couleur de leur catégorie
     if (existante) await db.categories.where('parentId').equals(existante.id).modify({ couleur })
     nav.retour()
@@ -94,6 +99,14 @@ export function EditionCategorie({ id }: { id?: string }) {
 
       <TitreSection>Couleur</TitreSection>
       <Groupe><ChoixCouleur valeur={couleur} surChange={setCouleur} /></Groupe>
+
+      <TitreSection>Budget mensuel</TitreSection>
+      <Groupe>
+        <Champ libelle="Budget du mois" aide={valeurBudget === null ? 'Montant invalide' : 'Facultatif · alerte à 80 % et à 100 %'}>
+          <Saisie inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="Aucun" aria-label="Budget mensuel de la catégorie" />
+        </Champ>
+      </Groupe>
+      <p className="-mt-1 px-1 text-[13px] leading-snug text-encre-pale">Toutes les dépenses de la catégorie (et de ses sous-catégories) sur le compte du budget du jour et sa carte comptent, y compris celles « à côté du budget » ou payées avec l’épargne. Les charges fixes ne comptent pas.</p>
 
       {existante && (
         <>

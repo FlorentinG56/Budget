@@ -5,6 +5,7 @@ import { evenementsPrevus, type JourProjete } from './projection'
 import { finEffectiveCredit, lendemain } from './recurrences'
 import type { Compte, DateISO, Devise, Operation, Recurrence } from './types'
 import { addDays } from 'date-fns'
+import { seuilBudget, type SuiviBudget } from './budgetsCategories'
 import { versISO } from './dates'
 
 /**
@@ -19,7 +20,7 @@ export interface Alerte {
   niveau: Niveau
   icone: string
   texte: string
-  cible?: 'calendrier' | 'charges' | 'sauvegarde' | 'periode'
+  cible?: 'calendrier' | 'charges' | 'sauvegarde' | 'periode' | 'analyses'
   date?: DateISO
 }
 
@@ -36,6 +37,7 @@ export interface ParamsAlertes {
   rappelSauvegardeJours: number
   sauvegardeDisponible: boolean // la sauvegarde existe (étape 10)
   maintenant: number
+  budgetsCategories?: SuiviBudget[] // budgets mensuels par catégorie (seuils 80 % et 100 %)
 }
 
 const quand = (date: DateISO, aujourdhui: DateISO) => {
@@ -90,7 +92,20 @@ export function calculerAlertes(p: ParamsAlertes): Alerte[] {
       texte: `Dernier paiement du ${r.libelle.charAt(0).toLowerCase() + r.libelle.slice(1)} ${mois === moisCourant ? 'ce mois-ci' : 'le mois prochain'} (${libelleJour(fin, p.aujourdhui).toLowerCase()})` })
   }
 
-  // 5. Rappel de sauvegarde (supprimer l'icône de l'app efface ses données)
+  // 5. Budgets par catégorie : 80 % puis 100 %
+  const mois = p.aujourdhui.slice(0, 7)
+  for (const b of p.budgetsCategories ?? []) {
+    const seuil = seuilBudget(b)
+    if (!seuil) continue
+    const nom = b.categorie.nom
+    alertes.push(seuil === 100
+      ? { id: `budget-cat-${b.categorie.id}-${mois}-100`, niveau: 'danger', icone: b.categorie.icone || '🔴', cible: 'analyses',
+          texte: `Budget ${nom} du mois dépassé de ${formaterMontant(-b.reste, p.devise)}` }
+      : { id: `budget-cat-${b.categorie.id}-${mois}-80`, niveau: 'attention', icone: b.categorie.icone || '🟠', cible: 'analyses',
+          texte: `${nom} : ${Math.floor(b.part * 100)} % du budget du mois (${formaterMontant(b.depense, p.devise)} sur ${formaterMontant(b.budget, p.devise)})` })
+  }
+
+  // 6. Rappel de sauvegarde (supprimer l'icône de l'app efface ses données)
   if (p.sauvegardeDisponible && p.rappelSauvegardeJours > 0) {
     const jours = p.derniereSauvegarde ? Math.floor((p.maintenant - p.derniereSauvegarde) / 86_400_000) : undefined
     if (jours === undefined || jours >= p.rappelSauvegardeJours) {

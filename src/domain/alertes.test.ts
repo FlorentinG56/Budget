@@ -12,6 +12,14 @@ const base: ParamsAlertes = {
 const textes = (p: Partial<ParamsAlertes>) => calculerAlertes({ ...base, ...p }).map((a) => a.texte.replace(/[  ]/g, ' '))
 
 describe('bandeaux d’alerte', () => {
+  it('budgets par catégorie : 80 % puis dépassement', () => {
+    const c = { id: 'alim', nom: 'Alimentation', icone: '🛒', couleur: '', ordre: 0, archivee: false, budgetMensuel: 40000 }
+    expect(textes({ budgetsCategories: [{ categorie: c, budget: 40000, depense: 34000, part: 0.85, reste: 6000 }] }))
+      .toEqual(['Alimentation : 85 % du budget du mois (340,00 $ sur 400,00 $)'])
+    expect(textes({ budgetsCategories: [{ categorie: c, budget: 40000, depense: 41200, part: 1.03, reste: -1200 }] }))
+      .toEqual(['Budget Alimentation du mois dépassé de 12,00 $'])
+    expect(textes({ budgetsCategories: [{ categorie: c, budget: 40000, depense: 1000, part: 0.025, reste: 39000 }] })).toEqual([])
+  })
   it('charges dans les 2 prochains jours (pas au-delà, pas en pause)', () => {
     const recs = [
       rec({ id: 'loyer', libelle: 'Loyer', montant: 120000, jours: [30] }),

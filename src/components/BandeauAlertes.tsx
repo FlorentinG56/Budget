@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { calculerAlertes, type Alerte } from '../domain/alertes'
 import { useBudget } from '../hooks/budget'
-import { useReglages } from '../hooks/donnees'
+import { useCategories, useReglages } from '../hooks/donnees'
+import { suiviBudgets } from '../domain/budgetsCategories'
 import { calculerProjection } from '../hooks/projection'
 import { useNav } from '../nav/Navigation'
 import { PagePeriode } from '../budget/PagePeriode'
@@ -26,6 +27,7 @@ export function BandeauAlertes() {
   const nav = useNav()
   const { ctx, etat } = useBudget()
   const reglages = useReglages()
+  const categories = useCategories()
   const [masquees, setMasquees] = useState(lireMasquees)
   const [sauvegarde, setSauvegarde] = useState(0) // > 0 : feuille « Sauvegarder maintenant » ouverte (recréée à chaque ouverture)
 
@@ -39,8 +41,9 @@ export function BandeauAlertes() {
       derniereSauvegarde: reglages.derniereSauvegarde, rappelSauvegardeJours: reglages.rappelSauvegardeJours,
       sauvegardeDisponible: true,
       maintenant: Date.now(),
+      budgetsCategories: categories ? suiviBudgets(categories, ctx.operations, ctx.budget, ctx.date) : undefined,
     })
-  }, [ctx, etat, reglages])
+  }, [ctx, etat, reglages, categories])
 
   const visibles = alertes.filter((a) => masquees[a.id] !== ctx?.date)
   const feuille = (
@@ -64,6 +67,7 @@ export function BandeauAlertes() {
     else if (a.cible === 'charges') nav.ouvrir(<ListeRecurrences genre="charges" />)
     else if (a.cible === 'periode' && etat.etat === 'actif') nav.ouvrir(<PagePeriode />)
     else if (a.cible === 'sauvegarde') nav.ouvrir(<PageSauvegarde />)
+    else if (a.cible === 'analyses') nav.changerOnglet('analyses')
   }
 
   return (

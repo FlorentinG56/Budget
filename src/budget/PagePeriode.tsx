@@ -9,6 +9,9 @@ import { libelleCourt, libelleJour, versISO } from '../domain/dates'
 import type { Devise } from '../domain/types'
 import { useBudget } from '../hooks/budget'
 import { Page, useNav } from '../nav/Navigation'
+import { moisDe, suiviBudgets } from '../domain/budgetsCategories'
+import { SuiviBudgets } from '../components/SuiviBudgets'
+import { useCategories } from '../hooks/donnees'
 import { HistoriquePeriodes, PageBilan } from './PageBilan'
 import { ChampMontant, lireMontant, versTexteMontant } from './ChampMontant'
 import { Projection } from './CarteBudget'
@@ -18,6 +21,7 @@ const court = (d: string) => libelleCourt(d).replace(/ \d{4}$/, '')
 export function PagePeriode() {
   const { ctx, etat } = useBudget()
   const nav = useNav()
+  const categories = useCategories()
   const [edition, setEdition] = useState<string | null>(null)
   const [editionCote, setEditionCote] = useState<string | null>(null)
   if (!ctx || etat.etat !== 'actif') return <Page titre="Période"><p className="text-encre-douce">Aucune période en cours.</p></Page>
@@ -29,6 +33,7 @@ export function PagePeriode() {
   const jours: string[] = []
   // 1re période démarrée en cours de route : pas de budget « rétroactif » avant le démarrage
   for (let d = periode.demarrageLe ?? bornes.debut; d <= ctx.date; d = versISO(addDays(parseISO(d), 1))) jours.push(d)
+  const suivi = categories ? suiviBudgets(categories, ctx.operations, ctx.budget, ctx.date) : []
   const depenseCote = depensesParFinancement(ctx.operations, ctx.budget, bornes.debut, bornes.fin).aCote
   const charges = previsionsPeriode(ctx.recurrences, ctx.operations, ctx.budget, bornes)
   const resteAPrelever = charges.detailCharges.filter((c) => c.estime).reduce((t, c) => t + c.montant, 0)
@@ -63,6 +68,11 @@ export function PagePeriode() {
           <Bouton className="!w-auto" disabled={nouvelle === null} onClick={async () => { if (nouvelle !== null) { await modifierEnveloppe(periode.id, nouvelle); setEdition(null) } }}>OK</Bouton>
         </div>
       )}
+
+      {suivi.length > 0 && (<>
+        <TitreSection>Budgets par catégorie ({moisDe(ctx.date).libelle})</TitreSection>
+        <SuiviBudgets suivi={suivi} devise={devise} />
+      </>)}
 
       <TitreSection>À côté du budget</TitreSection>
       <Groupe>
