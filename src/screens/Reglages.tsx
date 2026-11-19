@@ -17,6 +17,7 @@ import { activerFaceId, faceIdDisponible } from '../security/faceid'
 import { ListeRecurrences } from './reglages/Recurrences'
 import { PeriodeBudget } from './reglages/PeriodeBudget'
 import { ListeVoyages } from './voyages/Voyages'
+import { PageAbonnements } from './analyses/Abonnements'
 import { CHOIX_DELAI_VERROUILLAGE } from '../security/verrouillage'
 import { rechercherMiseAJour, type ResultatMiseAJour } from '../miseAJour'
 
@@ -63,6 +64,7 @@ export function Reglages() {
         <Ligne libelle="Charges fixes et crédits" surClic={() => nav.ouvrir(<ListeRecurrences genre="charges" />)} />
         <Ligne libelle="Revenus récurrents" surClic={() => nav.ouvrir(<ListeRecurrences genre="revenus" />)} />
         <Ligne libelle="Période du budget" surClic={() => nav.ouvrir(<PeriodeBudget />)} />
+        <Ligne libelle="Abonnements" surClic={() => nav.ouvrir(<PageAbonnements />)} />
         <Ligne libelle="Voyages" surClic={() => nav.ouvrir(<ListeVoyages />)} />
       </Groupe>
 

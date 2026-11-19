@@ -18,6 +18,7 @@ import { calculerProjection } from '../hooks/projection'
 import { suiviBudgets } from '../domain/budgetsCategories'
 import { SuiviBudgets } from '../components/SuiviBudgets'
 import { ListeRevues } from './analyses/Revue'
+import { PageAbonnements } from './analyses/Abonnements'
 import { useNav } from '../nav/Navigation'
 import { EditionOperation } from './operations/EditionOperation'
 
@@ -144,6 +145,9 @@ export function Analyses() {
             <span>📊 Revues de fin de mois</span><IconeChevron taille={18} className="text-encre-pale" />
           </button>
         )}
+        <button type="button" onClick={() => nav.ouvrir(<PageAbonnements />)} className="flex min-h-[52px] items-center justify-between rounded-carte bg-white px-4 text-left text-[16px] text-encre shadow-carte active:bg-fond">
+          <span>🔁 Abonnements</span><IconeChevron taille={18} className="text-encre-pale" />
+        </button>
 
         <TitreSection>Plus grosses dépenses</TitreSection>
         {donnees.top.length === 0 ? <p className="px-1 text-[15px] text-encre-douce">Aucune dépense.</p> : (
