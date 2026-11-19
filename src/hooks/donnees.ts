@@ -33,3 +33,7 @@ export function useRecurrences(): Recurrence[] | undefined {
 export function useObjectifs(): import('../domain/types').ObjectifEpargne[] | undefined {
   return useLiveQuery(() => db.objectifs.toArray(), [])
 }
+
+export function useVoyages(): import('../domain/types').Voyage[] | undefined {
+  return useLiveQuery(() => db.voyages.toArray(), [])
+}

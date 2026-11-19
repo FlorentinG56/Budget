@@ -28,6 +28,21 @@ describe('sauvegarde et restauration', () => {
     expect(r.budgetParPeriode).toBe(60000)
     source.close(); cible.close()
   })
+  it('restaure une sauvegarde créée avant les voyages, et sauvegarde les voyages', async () => {
+    const source = new BudgetDB('test-voyages-src')
+    await preparerUtilisateur(source)
+    await source.voyages.add({ id: 'v', nom: 'Voyage', compteId: 'eur', debut: '2026-12-20', fin: '2026-12-29', budget: 100000 })
+    const contenu = await exporterDonnees(source)
+    expect(contenu.tables.voyages).toHaveLength(1)
+    const ancienne = { ...contenu, tables: { ...contenu.tables } }; delete ancienne.tables.voyages
+    const cible = new BudgetDB('test-voyages-cible')
+    await cible.voyages.add({ id: 'x', nom: 'X', compteId: 'eur', debut: '2026-01-01', fin: '2026-01-02', budget: 1 })
+    await restaurerDonnees(validerContenu(JSON.stringify(ancienne)), cible)
+    expect(await cible.voyages.count()).toBe(0) // l'ancienne sauvegarde n'en avait pas
+    await restaurerDonnees(validerContenu(JSON.stringify(contenu)), cible)
+    expect((await cible.voyages.toArray()).map((v) => v.nom)).toEqual(['Voyage'])
+    source.close(); cible.close()
+  })
   it('refuse un contenu invalide', () => {
     expect(() => validerContenu('{"schema":2}')).toThrow()
     expect(() => validerContenu('{"schema":1,"tables":{"comptes":[]}}')).toThrow()

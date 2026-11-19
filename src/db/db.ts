@@ -8,6 +8,7 @@ import {
   type Periode,
   type Recurrence,
   type Reglages,
+  type Voyage,
 } from '../domain/types'
 
 /** Base locale IndexedDB : rien ne quitte l'iPhone. */
@@ -19,6 +20,7 @@ export class BudgetDB extends Dexie {
   periodes!: Table<Periode, string>
   objectifs!: Table<ObjectifEpargne, string>
   reglages!: Table<Reglages, string>
+  voyages!: Table<Voyage, string>
 
   constructor(nom = 'budget') {
     super(nom)
@@ -32,6 +34,8 @@ export class BudgetDB extends Dexie {
       objectifs: 'id, compteId',
       reglages: 'id',
     })
+    // version 2 : ajout des voyages (aucune donnée existante n'est modifiée)
+    this.version(2).stores({ voyages: 'id, debut, fin, compteId' })
   }
 }
 

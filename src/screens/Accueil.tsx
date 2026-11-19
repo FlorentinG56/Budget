@@ -14,8 +14,10 @@ import { formaterMontant } from '../domain/argent'
 import { aujourdhui } from '../domain/dates'
 import { trierRecentes } from '../domain/operations'
 import { montantDuCarte, soldeCompte } from '../domain/soldes'
-import { indexer, useCategories, useComptes, useObjectifs, useOperations, useRecurrences, useReglages } from '../hooks/donnees'
+import { indexer, useCategories, useComptes, useObjectifs, useOperations, useRecurrences, useReglages, useVoyages } from '../hooks/donnees'
 import { epargneReservee } from '../domain/epargne'
+import { voyageAccueil } from '../domain/voyage'
+import { CarteVoyage } from './voyages/Voyages'
 import { useNav } from '../nav/Navigation'
 import { EditionOperation } from './operations/EditionOperation'
 import { ListeOperations } from './operations/ListeOperations'
@@ -30,6 +32,7 @@ export function Accueil() {
   const reglages = useReglages()
   const recurrences = useRecurrences()
   const objectifs = useObjectifs()
+  const voyages = useVoyages()
   const date = aujourdhui()
   const titreDate = format(new Date(), 'EEEE d MMMM', { locale: fr })
 
@@ -41,6 +44,7 @@ export function Accueil() {
   const ops = operations ?? []
   const dernieres = trierRecentes(ops.filter((o) => o.type === 'depense' && o.date <= date)).slice(0, 5)
   const mapComptes = indexer(comptes)
+  const voyage = voyageAccueil(voyages ?? [], date)
   const mapCats = indexer(categories)
 
   const solde = principal ? soldeCompte(principal, ops, date) : 0
@@ -66,6 +70,7 @@ export function Accueil() {
         </button>
       )}
 
+      {voyage && mapComptes.get(voyage.compteId) && <CarteVoyage voyage={voyage} compte={mapComptes.get(voyage.compteId)!} />}
       <CarteBudget devise={principal?.devise ?? 'CAD'} />
 
       {principal && (

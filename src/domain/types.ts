@@ -132,6 +132,15 @@ export interface ObjectifEpargne {
   ordre?: number // ordre d'affichage choisi (sinon : Sécurité d'abord, puis par nom)
 }
 
+export interface Voyage {
+  id: string
+  nom: string
+  compteId: string // les dépenses de ce compte pendant les dates du voyage y sont rattachées
+  debut: DateISO
+  fin: DateISO // incluse
+  budget: Centimes // budget total du voyage
+}
+
 export interface Reglages {
   id: 'app'
   dureePeriodeJours: number

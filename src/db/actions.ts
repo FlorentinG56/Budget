@@ -1,7 +1,7 @@
 import { aujourdhui } from '../domain/dates'
 import { montantAjustement, soldeCompte } from '../domain/soldes'
 import { genererOperations } from '../domain/recurrences'
-import type { AffectationFin, Categorie, Centimes, Compte, MouvementEpargne, ObjectifEpargne, Operation, Periode, Recurrence } from '../domain/types'
+import type { AffectationFin, Categorie, Centimes, Compte, MouvementEpargne, ObjectifEpargne, Operation, Periode, Recurrence, Voyage } from '../domain/types'
 import { db, lireReglages, modifierReglages, type BudgetDB } from './db'
 import { categoriesInitiales } from './donneesInitiales'
 
@@ -291,4 +291,16 @@ export async function synchroniserSecurite(base: BudgetDB = db): Promise<string 
 /** Montant « à côté du budget » de la période (modifiable à tout moment, 0 possible). */
 export async function modifierACote(periodeId: string, montant: Centimes, base: BudgetDB = db) {
   await base.periodes.update(periodeId, { aCote: Math.max(0, montant) })
+}
+
+// ---------- Voyages ----------
+
+export async function enregistrerVoyage(v: Omit<Voyage, 'id'> & { id?: string }, base: BudgetDB = db): Promise<Voyage> {
+  const complet: Voyage = { ...v, id: v.id ?? nouvelId() }
+  await base.voyages.put(complet)
+  return complet
+}
+
+export async function supprimerVoyage(id: string, base: BudgetDB = db): Promise<void> {
+  await base.voyages.delete(id) // les dépenses restent sur le compte
 }
