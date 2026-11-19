@@ -210,12 +210,13 @@ export function depensesParCategorie(operations: Operation[], budget: Set<string
 }
 
 /** Nombre de jours où la dépense est restée sous le budget du jour (à partir du démarrage). */
-export function joursRespectes(periode: Periode, operations: Operation[], budget: Set<string>, jusquAu: DateISO = periode.dateFin): { respectes: number; total: number } {
+export function joursRespectes(periode: Periode, operations: Operation[], budget: Set<string>, jusquAu: DateISO = periode.dateFin, depuis?: DateISO): { respectes: number; total: number } {
   const b = { debut: periode.dateDebut, fin: periode.dateFin }
   const enveloppe = enveloppeEffective(periode, operations)
   const fin = jusquAu < periode.dateFin ? jusquAu : periode.dateFin
+  const debut = [periode.demarrageLe ?? periode.dateDebut, depuis ?? ''].sort().pop()!
   let respectes = 0, total = 0
-  for (let d = periode.demarrageLe ?? periode.dateDebut; d <= fin; d = lendemain(d)) {
+  for (let d = debut; d <= fin; d = lendemain(d)) {
     total++
     if (depensesBudget(operations, budget, d, d) <= calculerBudgetJour(enveloppe, operations, budget, b, d).budgetJour) respectes++
   }

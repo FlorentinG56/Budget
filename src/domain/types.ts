@@ -154,6 +154,7 @@ export interface Reglages {
   objectifSecuriteId?: string // objectif qui reçoit l'épargne de la paie et le reste des périodes
   rappelSauvegardeJours: number // « Dernière sauvegarde il y a X jours » au-delà de ce délai
   parcoursAccueil?: 'en_cours' | 'termine' // premier lancement d'un nouvel utilisateur
+  revuesVues?: string[] // revues de fin de mois déjà ouvertes ('AAAA-MM')
 }
 
 export const REGLAGES_PAR_DEFAUT: Reglages = {

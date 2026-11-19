@@ -12,6 +12,9 @@ const base: ParamsAlertes = {
 const textes = (p: Partial<ParamsAlertes>) => calculerAlertes({ ...base, ...p }).map((a) => a.texte.replace(/[  ]/g, ' '))
 
 describe('bandeaux d’alerte', () => {
+  it('revue de fin de mois', () => {
+    expect(textes({ revue: '2026-10' })).toEqual(['Ta revue d’octobre est prête'])
+  })
   it('budgets par catégorie : 80 % puis dépassement', () => {
     const c = { id: 'alim', nom: 'Alimentation', icone: '🛒', couleur: '', ordre: 0, archivee: false, budgetMensuel: 40000 }
     expect(textes({ budgetsCategories: [{ categorie: c, budget: 40000, depense: 34000, part: 0.85, reste: 6000 }] }))

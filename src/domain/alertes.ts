@@ -6,6 +6,7 @@ import { finEffectiveCredit, lendemain } from './recurrences'
 import type { Compte, DateISO, Devise, Operation, Recurrence } from './types'
 import { addDays } from 'date-fns'
 import { seuilBudget, type SuiviBudget } from './budgetsCategories'
+import { deMois } from './revue'
 import { versISO } from './dates'
 
 /**
@@ -20,7 +21,8 @@ export interface Alerte {
   niveau: Niveau
   icone: string
   texte: string
-  cible?: 'calendrier' | 'charges' | 'sauvegarde' | 'periode' | 'analyses'
+  cible?: 'calendrier' | 'charges' | 'sauvegarde' | 'periode' | 'analyses' | 'revue'
+  mois?: string // revue de fin de mois concernée
   date?: DateISO
 }
 
@@ -38,6 +40,7 @@ export interface ParamsAlertes {
   sauvegardeDisponible: boolean // la sauvegarde existe (étape 10)
   maintenant: number
   budgetsCategories?: SuiviBudget[] // budgets mensuels par catégorie (seuils 80 % et 100 %)
+  revue?: string // mois dont la revue est prête ('AAAA-MM')
 }
 
 const quand = (date: DateISO, aujourdhui: DateISO) => {
@@ -105,7 +108,12 @@ export function calculerAlertes(p: ParamsAlertes): Alerte[] {
           texte: `${nom} : ${Math.floor(b.part * 100)} % du budget du mois (${formaterMontant(b.depense, p.devise)} sur ${formaterMontant(b.budget, p.devise)})` })
   }
 
-  // 6. Rappel de sauvegarde (supprimer l'icône de l'app efface ses données)
+  // 6. Revue de fin de mois
+  if (p.revue) {
+    alertes.push({ id: `revue-${p.revue}`, niveau: 'info', icone: '📊', cible: 'revue', mois: p.revue, texte: `Ta revue ${deMois(p.revue)} est prête` })
+  }
+
+  // 7. Rappel de sauvegarde (supprimer l'icône de l'app efface ses données)
   if (p.sauvegardeDisponible && p.rappelSauvegardeJours > 0) {
     const jours = p.derniereSauvegarde ? Math.floor((p.maintenant - p.derniereSauvegarde) / 86_400_000) : undefined
     if (jours === undefined || jours >= p.rappelSauvegardeJours) {

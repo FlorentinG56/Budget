@@ -17,6 +17,7 @@ import { indexer, useCategories, useObjectifs } from '../hooks/donnees'
 import { calculerProjection } from '../hooks/projection'
 import { suiviBudgets } from '../domain/budgetsCategories'
 import { SuiviBudgets } from '../components/SuiviBudgets'
+import { ListeRevues } from './analyses/Revue'
 import { useNav } from '../nav/Navigation'
 import { EditionOperation } from './operations/EditionOperation'
 
@@ -137,6 +138,12 @@ export function Analyses() {
           Couleur : par rapport à la moyenne des 3 {g === 'semaine' ? 'semaines' : g === 'mois' ? 'mois' : 'périodes'} précédent{g === 'mois' ? 's' : 'es'} (rouge = plus, vert = moins) ; le trait sur la barre marque cette moyenne.
           Exclus : virements, remboursements de carte, ajustements de solde.
         </p>
+
+        {vue.budget && (
+          <button type="button" onClick={() => nav.ouvrir(<ListeRevues />)} className="flex min-h-[52px] items-center justify-between rounded-carte bg-white px-4 text-left text-[16px] text-encre shadow-carte active:bg-fond">
+            <span>📊 Revues de fin de mois</span><IconeChevron taille={18} className="text-encre-pale" />
+          </button>
+        )}
 
         <TitreSection>Plus grosses dépenses</TitreSection>
         {donnees.top.length === 0 ? <p className="px-1 text-[15px] text-encre-douce">Aucune dépense.</p> : (

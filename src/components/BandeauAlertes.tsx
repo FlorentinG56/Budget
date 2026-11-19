@@ -3,6 +3,8 @@ import { calculerAlertes, type Alerte } from '../domain/alertes'
 import { useBudget } from '../hooks/budget'
 import { useCategories, useReglages } from '../hooks/donnees'
 import { suiviBudgets } from '../domain/budgetsCategories'
+import { revueAAnnoncer } from '../domain/revue'
+import { PageRevue } from '../screens/analyses/Revue'
 import { calculerProjection } from '../hooks/projection'
 import { useNav } from '../nav/Navigation'
 import { PagePeriode } from '../budget/PagePeriode'
@@ -42,6 +44,7 @@ export function BandeauAlertes() {
       sauvegardeDisponible: true,
       maintenant: Date.now(),
       budgetsCategories: categories ? suiviBudgets(categories, ctx.operations, ctx.budget, ctx.date) : undefined,
+      revue: revueAAnnoncer(ctx.date, ctx.operations, ctx.budget, reglages.revuesVues ?? []),
     })
   }, [ctx, etat, reglages, categories])
 
@@ -68,6 +71,7 @@ export function BandeauAlertes() {
     else if (a.cible === 'periode' && etat.etat === 'actif') nav.ouvrir(<PagePeriode />)
     else if (a.cible === 'sauvegarde') nav.ouvrir(<PageSauvegarde />)
     else if (a.cible === 'analyses') nav.changerOnglet('analyses')
+    else if (a.cible === 'revue' && a.mois) nav.ouvrir(<PageRevue mois={a.mois} />)
   }
 
   return (
