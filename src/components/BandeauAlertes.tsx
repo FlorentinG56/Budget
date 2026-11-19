@@ -7,7 +7,8 @@ import { useNav } from '../nav/Navigation'
 import { PagePeriode } from '../budget/PagePeriode'
 import { ListeRecurrences } from '../screens/reglages/Recurrences'
 import { IconeFermer } from './Icones'
-import { PageSauvegarde } from '../screens/reglages/Sauvegarde'
+import { FormulaireSauvegarde, PageSauvegarde } from '../screens/reglages/Sauvegarde'
+import { Feuille } from './Feuille'
 
 const CLE = 'alertes-masquees' // { [idAlerte]: date du jour où elle a été masquée }
 const STYLES = {
@@ -26,6 +27,7 @@ export function BandeauAlertes() {
   const { ctx, etat } = useBudget()
   const reglages = useReglages()
   const [masquees, setMasquees] = useState(lireMasquees)
+  const [sauvegarde, setSauvegarde] = useState(0) // > 0 : feuille « Sauvegarder maintenant » ouverte (recréée à chaque ouverture)
 
   const alertes = useMemo(() => {
     if (!ctx || !reglages) return []
@@ -41,7 +43,15 @@ export function BandeauAlertes() {
   }, [ctx, etat, reglages])
 
   const visibles = alertes.filter((a) => masquees[a.id] !== ctx?.date)
-  if (visibles.length === 0) return null
+  const feuille = (
+    <Feuille ouverte={sauvegarde > 0} surFermer={() => setSauvegarde(0)} titre="Sauvegarder maintenant">
+      <p className="mb-3 text-[15px] leading-snug text-encre-douce">
+        Choisis un mot de passe, puis « Enregistrer dans Fichiers » et iCloud Drive dans le menu Partager. Le mot de passe n’est jamais mémorisé.
+      </p>
+      {sauvegarde > 0 && <FormulaireSauvegarde key={sauvegarde} surReussite={() => setTimeout(() => setSauvegarde(0), 1500)} />}
+    </Feuille>
+  )
+  if (visibles.length === 0) return feuille
 
   const masquer = (a: Alerte) => {
     const m = { ...lireMasquees(), [a.id]: ctx!.date }
@@ -59,15 +69,24 @@ export function BandeauAlertes() {
   return (
     <section className="flex flex-col gap-2" aria-label="Alertes">
       {visibles.map((a) => (
-        <div key={a.id} className={`flex items-center gap-2 rounded-[14px] border py-1 pl-3.5 pr-1 ${STYLES[a.niveau]}`}>
-          <button type="button" onClick={() => ouvrir(a)} className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2.5 text-left text-[15px] font-medium active:opacity-70">
-            <span aria-hidden="true">{a.icone}</span><span>{a.texte}</span>
-          </button>
-          <button type="button" onClick={() => masquer(a)} aria-label="Masquer jusqu’à demain" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full opacity-60 active:bg-black/5">
-            <IconeFermer taille={16} />
-          </button>
+        <div key={a.id} className={`rounded-[14px] border py-1 pl-3.5 pr-1 ${STYLES[a.niveau]}`}>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => ouvrir(a)} className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2.5 text-left text-[15px] font-medium active:opacity-70">
+              <span aria-hidden="true">{a.icone}</span><span>{a.texte}</span>
+            </button>
+            <button type="button" onClick={() => masquer(a)} aria-label="Masquer jusqu’à demain" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full opacity-60 active:bg-black/5">
+              <IconeFermer taille={16} />
+            </button>
+          </div>
+          {a.cible === 'sauvegarde' && (
+            <button type="button" onClick={() => setSauvegarde((n) => n + 1)}
+              className="mb-2 mr-2.5 mt-0.5 min-h-[44px] w-[calc(100%-10px)] rounded-[12px] bg-white text-[15px] font-semibold active:opacity-70">
+              💾 Sauvegarder maintenant
+            </button>
+          )}
         </div>
       ))}
+      {feuille}
     </section>
   )
 }

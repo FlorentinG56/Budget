@@ -52,6 +52,19 @@ export function PageSauvegarde() {
 }
 
 function CreerSauvegarde() {
+  return (
+    <>
+      <TitreSection>Créer une sauvegarde</TitreSection>
+      <FormulaireSauvegarde />
+    </>
+  )
+}
+
+/**
+ * Mot de passe + chiffrement + menu Partager. Le mot de passe ne vit que dans ce formulaire, le temps du chiffrement :
+ * il n'est jamais enregistré nulle part. Utilisé par Réglages et par le bandeau « Sauvegarder maintenant ».
+ */
+export function FormulaireSauvegarde({ surReussite }: { surReussite?: () => void }) {
   const [mdp, setMdp] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const [etat, setEtat] = useState<'' | 'en_cours' | 'ok' | 'annule'>('')
@@ -63,7 +76,7 @@ function CreerSauvegarde() {
     try {
       const fichier = await chiffrer(JSON.stringify(await exporterDonnees()), mdp)
       const ok = await enregistrerFichier(`budget-sauvegarde-${aujourdhui()}.json`, JSON.stringify(fichier), 'application/json')
-      if (ok) { await modifierReglages({ derniereSauvegarde: Date.now() }); setEtat('ok'); setMdp(''); setConfirmation('') }
+      if (ok) { await modifierReglages({ derniereSauvegarde: Date.now() }); setEtat('ok'); setMdp(''); setConfirmation(''); surReussite?.() }
       else setEtat('annule')
     } catch (e) {
       setErreur((e as Error).message); setEtat('')
@@ -71,8 +84,6 @@ function CreerSauvegarde() {
   }
 
   return (
-    <>
-      <TitreSection>Créer une sauvegarde</TitreSection>
       <div className="flex flex-col gap-2">
         <input type="password" autoComplete="new-password" value={mdp} onChange={(e) => { setMdp(e.target.value); setEtat('') }} placeholder={`Mot de passe (${LONGUEUR_MIN_MOT_DE_PASSE} caractères min.)`} aria-label="Mot de passe de la sauvegarde" className={champ} />
         <input type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} placeholder="Confirme le mot de passe" aria-label="Confirmation du mot de passe" className={champ} />
@@ -85,7 +96,6 @@ function CreerSauvegarde() {
         {etat === 'annule' && <p className="px-1 text-[14px] text-encre-douce">Enregistrement annulé : la sauvegarde n’a pas été enregistrée.</p>}
         {erreur && <p className="px-1 text-[14px] text-rouge">{erreur}</p>}
       </div>
-    </>
   )
 }
 
