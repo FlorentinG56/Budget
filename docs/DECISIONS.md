@@ -14,6 +14,7 @@ Complète le cahier des charges. Formulées de façon générale : aucune donné
 | Saisie d'historique (dépenses passées) | Abandonnée |
 | Confidentialité du dépôt | Dépôt public. Documentation sans détail personnel ; historique Git réécrit pour retirer ces détails de toutes les anciennes versions |
 | Code | Plus d'option « étape » (reste du développement par étapes). `heureRappel` conservé pour le rappel du soir. Saisie rapide et écran des charges découpés en composants, sans changement de comportement |
+| Barre d'onglets | Se cache quand on défile vers le bas, revient dès qu'on remonte un peu, en haut et en bas de page (comme Safari) ; le contenu garde une marge pour ne jamais rester sous la barre |
 
 ## Sécurité
 
