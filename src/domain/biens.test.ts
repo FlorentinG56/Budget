@@ -121,3 +121,33 @@ describe('vente', () => {
     expect(resultatVente(bien({ sortie: { motif: 'donne', date: '2026-11-21' } }))).toBeUndefined()
   })
 })
+
+describe('F5 : courbe et tri', () => {
+  it('courbe : 1er de chaque mois depuis la première acquisition, sorties prises en compte', async () => {
+    const { courbeValeurBiens } = await import('./biens')
+    const l = [
+      bien({ id: 'a', categorie: 'bijoux', prixAchat: 10000, dateAcquisition: '2026-08-15' }),
+      bien({ id: 'b', categorie: 'bijoux', prixAchat: 5000, dateAcquisition: '2026-09-10', sortie: { motif: 'donne', date: '2026-11-01' } }),
+      bien({ id: 'e', devise: 'EUR', dateAcquisition: '2020-01-01' }),
+    ]
+    expect(courbeValeurBiens(l, 'CAD', '2026-11-21')).toEqual([
+      { date: '2026-08-15', valeur: 10000 }, { date: '2026-09-01', valeur: 10000 }, { date: '2026-10-01', valeur: 15000 },
+      { date: '2026-11-01', valeur: 10000 }, { date: '2026-11-21', valeur: 10000 },
+    ])
+    expect(courbeValeurBiens(l, 'EUR', '2026-11-21')).toHaveLength(84) // 2020-01-01 → 2026-11-01 (83 mois) + aujourd'hui
+    expect(courbeValeurBiens([], 'CAD', '2026-11-21')).toEqual([])
+  })
+  it('tri par valeur, date, nom, catégorie', async () => {
+    const { trierBiens } = await import('./biens')
+    const l = [
+      bien({ id: 'tv', nom: 'TV', categorie: 'tv_audio', prixAchat: 80000, dateAcquisition: '2026-01-01' }),
+      bien({ id: 'mac', nom: 'Mac', categorie: 'ordinateur', prixAchat: 250000, dateAcquisition: '2024-05-01' }),
+      bien({ id: 'tel', nom: 'iPhone', categorie: 'telephone', prixAchat: 140000, dateAcquisition: '2026-09-01' }),
+    ]
+    const ids = (t: 'valeur' | 'date' | 'nom' | 'categorie') => trierBiens(l, t, '2026-11-21').map((b) => b.id)
+    expect(ids('valeur')).toEqual(['mac', 'tel', 'tv'])
+    expect(ids('date')).toEqual(['tel', 'tv', 'mac'])
+    expect(ids('nom')).toEqual(['tel', 'mac', 'tv'])
+    expect(ids('categorie')).toEqual(['tel', 'mac', 'tv'])
+  })
+})

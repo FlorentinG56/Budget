@@ -165,3 +165,44 @@ export function resultatVente(b: Bien, reglages?: Pick<Reglages, 'tauxBiens'>): 
   const valeurEstimee = valeurAvantSortie(b, reglages)
   return { valeurEstimee, parRapportEstimation: b.sortie.prixVente - valeurEstimee, parRapportAchat: b.sortie.prixVente - b.prixAchat }
 }
+
+// ---------- F5 : courbe, tri, filtre ----------
+
+export interface PointValeur { date: DateISO; valeur: Centimes }
+
+/**
+ * Évolution de la valeur totale des biens d'une devise, calculée (rien n'est stocké) : un point le 1er de chaque mois
+ * depuis la première acquisition, plus aujourd'hui. Les biens sortis comptent jusqu'à leur sortie.
+ */
+export function courbeValeurBiens(biens: Bien[], devise: Devise, aujourdhui: DateISO, reglages?: Pick<Reglages, 'tauxBiens'>): PointValeur[] {
+  const liste = biens.filter((b) => b.devise === devise)
+  if (liste.length === 0) return []
+  const debut = liste.map((b) => b.dateAcquisition).sort()[0]
+  const dates: DateISO[] = [debut]
+  let [a, m] = [Number(debut.slice(0, 4)), Number(debut.slice(5, 7))]
+  for (;;) {
+    m++; if (m > 12) { m = 1; a++ }
+    const d = `${a}-${String(m).padStart(2, '0')}-01`
+    if (d >= aujourdhui) break
+    dates.push(d)
+  }
+  if (aujourdhui > debut) dates.push(aujourdhui)
+  return dates.map((date) => ({ date, valeur: liste.reduce((s, b) => s + valeurBien(b, date, reglages), 0) }))
+}
+
+export type TriBiens = 'valeur' | 'date' | 'nom' | 'categorie'
+
+/** Tri de la liste : valeur (la plus haute d'abord), date (le plus récent d'abord), nom, catégorie (puis valeur). */
+export function trierBiens(biens: Bien[], tri: TriBiens, date: DateISO, reglages?: Pick<Reglages, 'tauxBiens'>): Bien[] {
+  const v = new Map(biens.map((b) => [b.id, valeurBien(b, date, reglages)]))
+  const ordreCat = new Map(CATEGORIES_BIENS.map((c, i) => [c.id, i]))
+  const parValeur = (x: Bien, y: Bien) => v.get(y.id)! - v.get(x.id)!
+  return [...biens].sort((x, y) => {
+    switch (tri) {
+      case 'date': return y.dateAcquisition.localeCompare(x.dateAcquisition) || x.nom.localeCompare(y.nom, 'fr')
+      case 'nom': return x.nom.localeCompare(y.nom, 'fr')
+      case 'categorie': return ordreCat.get(x.categorie)! - ordreCat.get(y.categorie)! || parValeur(x, y)
+      default: return parValeur(x, y) || x.nom.localeCompare(y.nom, 'fr')
+    }
+  })
+}

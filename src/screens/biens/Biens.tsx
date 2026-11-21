@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { compresserPhoto } from '../../biens/photo'
 import { ChampMontant, lireMontant, versTexteMontant } from '../../budget/ChampMontant'
 import { Feuille } from '../../components/Feuille'
@@ -7,10 +7,11 @@ import { Bouton, Champ, Choix, Groupe, Interrupteur, Saisie } from '../../compon
 import { IconeChevron } from '../../components/Icones'
 import { TitreSection } from '../../components/ui'
 import { changerEtatBien, encaisserVente, enregistrerBien, enregistrerPhoto, ignorerVente, reactiverBien, sortirBien, supprimerBien, type NouveauBien } from '../../db/actions'
-import { db } from '../../db/db'
+import { db, modifierReglages } from '../../db/db'
 import { formaterMontant } from '../../domain/argent'
 import {
-  CATEGORIES_BIENS, ETATS_BIENS, MOTIFS_SORTIE, PLANCHER_DEFAUT, coutTotal, decotePct, infoCategorie, nomEtat, resultatVente, tauxDuBien, valeurBien,
+  CATEGORIES_BIENS, ETATS_BIENS, MOTIFS_SORTIE, PLANCHER_DEFAUT, courbeValeurBiens, coutTotal, decotePct, infoCategorie, nomEtat, resultatVente, tauxDuBien,
+  totauxBiens, totauxParCategorie, trierBiens, valeurBien, type TriBiens,
 } from '../../domain/biens'
 import { aujourdhui, libelleCourt } from '../../domain/dates'
 import { dettes } from '../../domain/dettes'
@@ -35,25 +36,103 @@ export function Miniature({ bien, taille = 'h-12 w-12', texte = 'text-[24px]' }:
     : <span className={`${taille} ${texte} flex shrink-0 items-center justify-center rounded-[10px] bg-fond`} aria-hidden="true">{infoCategorie(bien.categorie).icone}</span>
 }
 
-/** Section « Biens » de l'onglet Patrimoine. */
+const CourbeBiens = lazy(() => import('./CourbeBiens'))
+
+/** Section « Biens » de l'onglet Patrimoine : totaux, courbe, liste (grille de photos ou liste compacte), tri, filtre. */
 export function SectionBiens() {
   const nav = useNav()
   const biens = useBiens()
   const reglages = useReglages()
+  const [filtre, setFiltre] = useState<'' | CategorieBien>('')
+  const [detail, setDetail] = useState(false)
   if (!biens || !reglages) return null
   const date = aujourdhui()
-  const actifs = biens.filter((b) => !b.sortie).sort((a, b) => valeurBien(b, date, reglages) - valeurBien(a, date, reglages))
+  const affichage = reglages.affichageBiens ?? 'grille'
+  const tri: TriBiens = reglages.triBiens ?? 'valeur'
+  const actifs = biens.filter((b) => !b.sortie)
+  const visibles = trierBiens(actifs.filter((b) => !filtre || b.categorie === filtre), tri, date, reglages)
   const archives = biens.filter((b) => b.sortie).sort((a, b) => b.sortie!.date.localeCompare(a.sortie!.date))
+  const totaux = totauxBiens(biens, date, reglages)
+  const parCat = totauxParCategorie(biens, date, reglages)
+  const categoriesPresentes = CATEGORIES_BIENS.filter((c) => actifs.some((b) => b.categorie === c.id))
+  const somme = (k: 'achat' | 'valeur' | 'perte') => [...totaux].map(([d, t]) => formaterMontant(k === 'perte' ? -t[k] : t[k], d)).join(' + ')
   return (
     <>
       <button type="button" onClick={() => nav.ouvrir(<EditionBien />)} className="min-h-[46px] rounded-[12px] bg-white text-[16px] font-semibold text-bleu shadow-carte active:bg-fond">+ Ajouter un bien</button>
       {actifs.length === 0 ? (
         <p className="px-1 text-[15px] leading-snug text-encre-douce">Aucun bien pour l’instant. Ajoute ce que tu possèdes (téléphone, ordinateur, voiture…) pour suivre sa valeur.</p>
-      ) : (
-        <Groupe>{actifs.map((b) => <LigneBien key={b.id} bien={b} />)}</Groupe>
-      )}
+      ) : (<>
+        <section className="rounded-carte bg-white p-4 shadow-carte" aria-label="Totaux des biens">
+          <div className="space-y-1 text-[15px]">
+            <p className="flex justify-between gap-2"><span className="text-encre-douce">Valeur actuelle</span><span className="text-right text-[18px] font-bold text-encre">{somme('valeur')}</span></p>
+            <p className="flex justify-between gap-2"><span className="text-encre-douce">Coût d’achat</span><span className="text-right font-semibold">{somme('achat')}</span></p>
+            <p className="flex justify-between gap-2"><span className="text-encre-douce">Perte de valeur</span><span className="text-right font-semibold">{somme('perte')}</span></p>
+          </div>
+          <button type="button" onClick={() => setDetail(!detail)} aria-expanded={detail} className="mt-2 min-h-[36px] text-[14px] font-semibold text-bleu">Détail par catégorie {detail ? '▴' : '▾'}</button>
+          {detail && (
+            <div className="space-y-1.5 border-t border-trait pt-2">
+              {parCat.map((l) => (
+                <div key={`${l.categorie}-${l.devise}`} className="text-[14px]">
+                  <p className="flex justify-between"><span className="text-encre">{infoCategorie(l.categorie).icone} {infoCategorie(l.categorie).nom} ({l.totaux.nombre})</span><span className="font-semibold">{formaterMontant(l.totaux.valeur, l.devise)}</span></p>
+                  <p className="flex justify-between text-[12px] text-encre-pale"><span>achat {formaterMontant(l.totaux.achat, l.devise)}</span><span>perte {formaterMontant(-l.totaux.perte, l.devise)}</span></p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+        <Suspense fallback={<div className="h-[210px] rounded-carte bg-white shadow-carte" />}>
+          {[...totaux.keys()].map((d) => { const pts = courbeValeurBiens(biens, d, date, reglages); return pts.length > 1 ? <CourbeBiens key={d} points={pts} devise={d} /> : null })}
+        </Suspense>
+
+        <div className="flex items-center gap-2">
+          <label className="relative flex min-h-[40px] flex-1 items-center gap-1 rounded-[10px] bg-white px-3 text-[14px] shadow-carte">
+            <span className="text-encre-douce">Tri</span><span className="truncate font-medium text-encre">{TRIS.find((t) => t[0] === tri)![1]}</span>
+            <select value={tri} onChange={(e) => void modifierReglages({ triBiens: e.target.value as TriBiens })} className="absolute inset-0 opacity-0" aria-label="Trier par">
+              {TRIS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </label>
+          <label className="relative flex min-h-[40px] flex-1 items-center gap-1 rounded-[10px] bg-white px-3 text-[14px] shadow-carte">
+            <span className="truncate font-medium text-encre">{filtre ? `${infoCategorie(filtre).icone} ${infoCategorie(filtre).nom}` : 'Toutes'}</span>
+            <select value={filtre} onChange={(e) => setFiltre(e.target.value as '' | CategorieBien)} className="absolute inset-0 opacity-0" aria-label="Filtrer par catégorie">
+              <option value="">Toutes les catégories</option>
+              {categoriesPresentes.map((c) => <option key={c.id} value={c.id}>{c.icone} {c.nom}</option>)}
+            </select>
+          </label>
+          <button type="button" onClick={() => void modifierReglages({ affichageBiens: affichage === 'grille' ? 'liste' : 'grille' })}
+            aria-label={affichage === 'grille' ? 'Afficher en liste' : 'Afficher en grille'} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-white text-[18px] text-bleu shadow-carte">
+            {affichage === 'grille' ? '☰' : '▦'}
+          </button>
+        </div>
+        {visibles.length === 0 ? <p className="px-1 text-[15px] text-encre-douce">Aucun bien dans cette catégorie.</p>
+          : affichage === 'grille' ? (
+            <div className="grid grid-cols-2 gap-2.5" aria-label="Biens">{visibles.map((b) => <TuileBien key={b.id} bien={b} />)}</div>
+          ) : (
+            <Groupe>{visibles.map((b) => <LigneBien key={b.id} bien={b} />)}</Groupe>
+          )}
+      </>)}
       <Archives biens={archives} />
     </>
+  )
+}
+
+const TRIS: [TriBiens, string][] = [['valeur', 'Valeur'], ['date', 'Date'], ['nom', 'Nom'], ['categorie', 'Catégorie']]
+
+/** Tuile de la grille : photo, nom, valeur actuelle, décote. */
+function TuileBien({ bien }: { bien: Bien }) {
+  const nav = useNav()
+  const reglages = useReglages()
+  const valeur = valeurBien(bien, aujourdhui(), reglages)
+  return (
+    <button type="button" onClick={() => nav.ouvrir(<PageBien id={bien.id} />)} className="overflow-hidden rounded-carte bg-white text-left shadow-carte active:opacity-80">
+      <Miniature bien={bien} taille="aspect-square w-full !rounded-none" texte="text-[44px]" />
+      <span className="block px-3 pb-2.5 pt-2">
+        <span className="block truncate text-[15px] font-medium text-encre">{bien.nom}</span>
+        <span className="flex items-baseline justify-between gap-1">
+          <span className="truncate text-[15px] font-bold text-encre">{formaterMontant(valeur, bien.devise)}</span>
+          <span className="shrink-0 text-[12px] text-encre-pale">−{decotePct(bien.prixAchat, valeur)} %</span>
+        </span>
+      </span>
+    </button>
   )
 }
 
