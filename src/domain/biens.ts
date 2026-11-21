@@ -220,3 +220,30 @@ export function proposerAuxBiens(op: Pick<import('./types').Operation, 'type' | 
   if (op.sousCategorieId && SOUS_CATEGORIES_EXCLUES.includes(op.sousCategorieId)) return false
   return CATEGORIES_PROPOSEES_AUX_BIENS.includes(op.categorieId)
 }
+
+// ---------- F8 : inventaire pour l'assurance ----------
+
+export interface LigneInventaire {
+  bien: Bien
+  categorie: string
+  valeur: Centimes
+  etat: string
+}
+
+/** Inventaire des biens actifs (par catégorie puis par valeur décroissante) et totaux par devise. */
+export function inventaire(biens: Bien[], date: DateISO, reglages?: Pick<Reglages, 'tauxBiens'>): { lignes: LigneInventaire[]; totaux: Map<Devise, TotauxBiens> } {
+  const lignes = trierBiens(biensActifs(biens), 'categorie', date, reglages)
+    .map((b) => ({ bien: b, categorie: infoCategorie(b.categorie).nom, valeur: valeurBien(b, date, reglages), etat: nomEtat(b.etat) }))
+  return { lignes, totaux: totauxBiens(biens, date, reglages) }
+}
+
+/** Texte compatible avec les polices standard d'un PDF (espaces fines, signe moins, apostrophes, emojis). */
+export function textePdf(t: string): string {
+  return t
+    .replace(/[   ]/g, ' ')
+    .replace(/−/g, '-')
+    .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+    .replace(/[–—]/g, '-')
+    .replace(/[^\u0000-ÿ€…]/gu, '')
+    .replace(/  +/g, ' ').trim()
+}

@@ -30,8 +30,9 @@ Au premier lancement, un parcours d'accueil crée les comptes : l'app ne contien
 
 Saisie rapide (dépense, revenu, virement), comptes et carte de crédit, charges fixes, crédits et revenus récurrents
 avec prélèvement automatique, budget journalier (budget fixe par période, projection des jours suivants, bilan par catégorie),
-calendrier avec solde projeté, épargne virtuelle (Sécurité, objectifs), bandeaux d'alerte, analyses,
-sauvegarde chiffrée, export CSV, code PIN et Face ID. Décisions détaillées : `docs/DECISIONS.md`.
+calendrier avec solde projeté, sécurité sur l'accueil et répartition de fin de quinzaine, patrimoine (épargne réelle et projets,
+dettes, inventaire des biens avec photos, décote et inventaire PDF pour l'assurance), bandeaux d'alerte, analyses, voyages,
+abonnements, sauvegarde chiffrée (photos comprises), export CSV, code PIN et Face ID. Décisions détaillées : `docs/DECISIONS.md`.
 
 ## Structure
 
@@ -39,14 +40,16 @@ sauvegarde chiffrée, export CSV, code PIN et Face ID. Décisions détaillées :
 src/
   domain/      fonctions pures + types (montants en centimes, calculs) — testées
   security/    PIN haché (PBKDF2), délai après erreurs, verrouillage auto, sauvegarde chiffrée (AES-GCM), Face ID
-  db/          base Dexie (7 tables), actions, sauvegarde / restauration
+  db/          base Dexie (10 tables), actions, sauvegarde / restauration
   budget/      carte du budget, période, bilan, remboursement de carte
   hooks/       lectures réactives, état du budget, projection du solde
   lock/        écrans de création / saisie du code, contexte de verrouillage
   components/  barre d'onglets, bouton +, panneaux, cartes
   saisie/      saisie rapide : orchestration, modes (dépense, revenu, virement), confirmation
   accueil/     parcours d'accueil d'un nouvel utilisateur
-  screens/     Accueil, Calendrier, Analyses, Épargne, Réglages
+  biens/       photos (compression sur l'iPhone), inventaire PDF
+  lib/         enregistrement de fichiers (menu Partager)
+  screens/     Accueil, Calendrier, Analyses, Patrimoine (épargne, dettes, biens), Réglages
                (reglages/recurrences/ : liste, formulaire, filtres et infos crédit des charges et revenus)
 ```
 

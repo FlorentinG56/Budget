@@ -7,7 +7,8 @@ import { Bouton, Champ, Choix, Groupe, Interrupteur, Saisie } from '../../compon
 import { IconeChevron } from '../../components/Icones'
 import { TitreSection } from '../../components/ui'
 import { changerEtatBien, encaisserVente, enregistrerBien, enregistrerPhoto, ignorerVente, reactiverBien, sortirBien, supprimerBien, type NouveauBien } from '../../db/actions'
-import { db, modifierReglages } from '../../db/db'
+import { db, lireReglages, modifierReglages } from '../../db/db'
+import { enregistrerFichier } from '../../lib/fichier'
 import { formaterMontant } from '../../domain/argent'
 import {
   CATEGORIES_BIENS, ETATS_BIENS, MOTIFS_SORTIE, PLANCHER_DEFAUT, courbeValeurBiens, coutTotal, decotePct, infoCategorie, nomEtat, resultatVente, tauxDuBien,
@@ -110,7 +111,30 @@ export function SectionBiens() {
             <Groupe>{visibles.map((b) => <LigneBien key={b.id} bien={b} />)}</Groupe>
           )}
       </>)}
+      {actifs.length > 0 && <BoutonInventaire />}
       <Archives biens={archives} />
+    </>
+  )
+}
+
+/** F8 : inventaire PDF pour l'assurance, généré sur l'iPhone, enregistré via le menu Partager. */
+function BoutonInventaire() {
+  const [etat, setEtat] = useState<'' | 'en_cours' | 'ok' | 'erreur'>('')
+  return (
+    <>
+      <button type="button" disabled={etat === 'en_cours'} onClick={async () => {
+        setEtat('en_cours')
+        try {
+          const [{ genererInventairePdf }, biens, photos, reglages] = await Promise.all([import('../../biens/inventairePdf'), db.biens.toArray(), db.photos.toArray(), lireReglages()])
+          const pdf = await genererInventairePdf(biens, photos, aujourdhui(), reglages)
+          setEtat((await enregistrerFichier(`inventaire-biens-${aujourdhui()}.pdf`, pdf, 'application/pdf')) ? 'ok' : '')
+        } catch { setEtat('erreur') }
+      }} className="min-h-[46px] rounded-[12px] bg-white text-[16px] font-semibold text-bleu shadow-carte active:bg-fond disabled:opacity-50">
+        {etat === 'en_cours' ? 'Préparation du PDF…' : '📄 Inventaire pour l’assurance (PDF)'}
+      </button>
+      <p className="px-1 text-[12px] leading-snug text-encre-pale">
+        {etat === 'ok' ? '✓ Inventaire créé. ' : etat === 'erreur' ? 'Le PDF n’a pas pu être créé. ' : ''}Tous les biens actifs avec photo, prix, valeur, n° de série, état et facture. Créé sur l’iPhone : enregistre-le dans Fichiers, iCloud Drive ou envoie-le par courriel.
+      </p>
     </>
   )
 }

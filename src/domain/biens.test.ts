@@ -168,3 +168,24 @@ describe('F6 : proposer d’ajouter une dépense aux biens', () => {
     expect(proposerAuxBiens(d({ type: 'revenu' }))).toBe(false)
   })
 })
+
+describe('F8 : inventaire', () => {
+  it('biens actifs par catégorie, valeur, état ; totaux par devise', async () => {
+    const { inventaire } = await import('./biens')
+    const l = [
+      bien({ id: 'mac', nom: 'Mac', categorie: 'ordinateur', prixAchat: 250000, dateAcquisition: '2026-11-21', etat: 'bon' }),
+      bien({ id: 'tel', nom: 'iPhone', dateAcquisition: '2026-11-21' }),
+      bien({ id: 'v', nom: 'Vendu', sortie: { motif: 'vendu', date: '2026-01-01', prixVente: 1 } }),
+    ]
+    const r = inventaire(l, '2026-11-21')
+    expect(r.lignes.map((x) => [x.bien.id, x.categorie, x.valeur, x.etat])).toEqual([
+      ['tel', 'Téléphones, tablettes, montres connectées', 100000, 'Très bon'], ['mac', 'Ordinateurs', 225000, 'Bon'],
+    ])
+    expect(r.totaux.get('CAD')).toEqual({ achat: 350000, valeur: 325000, perte: 25000, nombre: 2 })
+  })
+  it('texte compatible PDF', async () => {
+    const { textePdf } = await import('./biens')
+    expect(textePdf('1 400,00 $ − l’iPhone 📱 « neuf »')).toBe("1 400,00 $ - l'iPhone « neuf »")
+    expect(textePdf('5 000,00 €')).toBe('5 000,00 €')
+  })
+})
