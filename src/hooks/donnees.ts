@@ -37,3 +37,12 @@ export function useObjectifs(): import('../domain/types').ObjectifEpargne[] | un
 export function useVoyages(): import('../domain/types').Voyage[] | undefined {
   return useLiveQuery(() => db.voyages.toArray(), [])
 }
+
+export function useBiens(): import('../domain/types').Bien[] | undefined {
+  return useLiveQuery(() => db.biens.toArray(), [])
+}
+
+/** Photo d'un bien (data URL), ou undefined pendant le chargement / null si absente. */
+export function usePhoto(id?: string): string | null | undefined {
+  return useLiveQuery(async () => (id ? (await db.photos.get(id))?.donnees ?? null : null), [id])
+}

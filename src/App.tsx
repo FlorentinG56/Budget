@@ -11,7 +11,7 @@ import { EcranCreationCode, EcranDeverrouillage } from './lock/EcransVerrou'
 import { useVerrou } from './lock/Verrou'
 import { Accueil } from './screens/Accueil'
 import { Calendrier } from './screens/Calendrier'
-import { Epargne } from './screens/Epargne'
+import { Patrimoine } from './screens/Patrimoine'
 import { Reglages } from './screens/Reglages'
 
 // Les analyses (et leur bibliothèque de graphiques) ne sont chargées qu'à l'ouverture de l'onglet.
@@ -21,7 +21,7 @@ const ECRANS: Record<Onglet, React.ComponentType> = {
   accueil: Accueil,
   calendrier: Calendrier,
   analyses: Analyses,
-  epargne: Epargne,
+  epargne: Patrimoine,
   reglages: Reglages,
 }
 

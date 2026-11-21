@@ -2,7 +2,7 @@ import { aujourdhui } from '../domain/dates'
 import { montantAjustement, soldeCompte } from '../domain/soldes'
 import { genererOperations } from '../domain/recurrences'
 import { CIBLE_SECURITE_DEFAUT, repartirFinQuinzaine, soldeObjectif } from '../domain/epargne'
-import type { AffectationFin, Categorie, Centimes, Compte, DateISO, MouvementEpargne, ObjectifEpargne, Operation, Periode, Recurrence, Voyage } from '../domain/types'
+import type { AffectationFin, Bien, CategorieBien, EtatBien, MotifSortie, PhotoBien, Categorie, Centimes, Compte, DateISO, MouvementEpargne, ObjectifEpargne, Operation, Periode, Recurrence, Voyage } from '../domain/types'
 import { db, lireReglages, modifierReglages, type BudgetDB } from './db'
 import { categoriesInitiales } from './donneesInitiales'
 
@@ -378,4 +378,86 @@ export async function enregistrerVoyage(v: Omit<Voyage, 'id'> & { id?: string },
 
 export async function supprimerVoyage(id: string, base: BudgetDB = db): Promise<void> {
   await base.voyages.delete(id) // les dépenses restent sur le compte
+}
+
+// ---------- Patrimoine : biens ----------
+
+export type NouveauBien = Omit<Bien, 'id' | 'creeLe' | 'historiqueEtat'> & { id?: string; historiqueEtat?: Bien['historiqueEtat'] }
+
+export async function enregistrerBien(b: NouveauBien, base: BudgetDB = db): Promise<Bien> {
+  return base.transaction('rw', base.biens, base.photos, async () => {
+    const existant = b.id ? await base.biens.get(b.id) : undefined
+    const complet: Bien = { ...b, historiqueEtat: b.historiqueEtat ?? existant?.historiqueEtat ?? [], id: b.id ?? nouvelId(), creeLe: existant?.creeLe ?? Date.now() }
+    // photo ou facture remplacée : l'ancienne est supprimée
+    for (const k of ['photoId', 'factureId'] as const) if (existant?.[k] && existant[k] !== complet[k]) await base.photos.delete(existant[k]!)
+    await base.biens.put(complet)
+    return complet
+  })
+}
+
+/** Changement d'état (historique : date, ancien, nouveau, note). */
+export async function changerEtatBien(id: string, nouveau: EtatBien, date: string, note?: string, base: BudgetDB = db): Promise<void> {
+  await base.transaction('rw', base.biens, async () => {
+    const b = await base.biens.get(id)
+    if (!b || b.etat === nouveau) return
+    await base.biens.update(id, { etat: nouveau, historiqueEtat: [...b.historiqueEtat, { date, ancien: b.etat, nouveau, ...(note ? { note } : {}) }] })
+  })
+}
+
+/** « Ce bien n'est plus à moi » : vendu, donné, jeté / cassé, perdu / volé. */
+export async function sortirBien(id: string, sortie: { motif: MotifSortie; date: string; prixVente?: Centimes }, base: BudgetDB = db): Promise<void> {
+  await base.biens.update(id, { sortie: { motif: sortie.motif, date: sortie.date, ...(sortie.motif === 'vendu' && sortie.prixVente !== undefined ? { prixVente: sortie.prixVente } : {}) } })
+}
+
+/** Après une vente : « Ignorer » la proposition d'ajouter le prix au solde. */
+export async function ignorerVente(id: string, base: BudgetDB = db): Promise<void> {
+  const b = await base.biens.get(id)
+  if (b?.sortie) await base.biens.update(id, { sortie: { ...b.sortie, venteIgnoree: true } })
+}
+
+export async function reactiverBien(id: string, base: BudgetDB = db): Promise<void> {
+  await base.biens.update(id, { sortie: undefined })
+}
+
+/** Après une vente : ajoute le prix de vente au solde d'un compte (revenu, catégorie « Vente »). Jamais automatique. */
+export async function encaisserVente(id: string, compteId: string, base: BudgetDB = db): Promise<Operation | undefined> {
+  return base.transaction('rw', [base.biens, base.operations, base.categories, base.comptes], async () => {
+    const b = await base.biens.get(id)
+    if (!b?.sortie || b.sortie.motif !== 'vendu' || !b.sortie.prixVente || b.sortie.operationId) return undefined
+    if (!(await base.categories.get(CATEGORIE_VENTE))) {
+      await base.categories.add({ id: CATEGORIE_VENTE, nom: 'Vente', icone: '🏷️', couleur: '#22C55E', ordre: await base.categories.count(), archivee: false })
+    }
+    const op: Operation = { id: nouvelId(), date: b.sortie.date, montant: b.sortie.prixVente, type: 'revenu', compteId, categorieId: CATEGORIE_VENTE, note: `Vente : ${b.nom}`, creeLe: Date.now() }
+    await base.operations.add(op)
+    await base.biens.update(id, { sortie: { ...b.sortie, operationId: op.id } })
+    return op
+  })
+}
+
+export const CATEGORIE_VENTE = 'vente'
+
+export async function supprimerBien(id: string, base: BudgetDB = db): Promise<void> {
+  await base.transaction('rw', base.biens, base.photos, base.operations, async () => {
+    const b = await base.biens.get(id)
+    if (!b) return
+    for (const p of [b.photoId, b.factureId]) if (p) await base.photos.delete(p)
+    // les dépenses de réparation restent, sans lien
+    for (const op of await base.operations.filter((o) => o.bienId === id).toArray()) await base.operations.update(op.id, { bienId: undefined })
+    await base.biens.delete(id)
+  })
+}
+
+export async function enregistrerPhoto(donnees: string, taille: number, base: BudgetDB = db): Promise<PhotoBien> {
+  const p: PhotoBien = { id: nouvelId(), donnees, taille }
+  await base.photos.add(p)
+  return p
+}
+
+/** Décote d'une catégorie de biens (Réglages → Catégories de biens). null : revenir au défaut. */
+export async function modifierTauxCategorie(categorie: CategorieBien, valeur: { taux: number; tauxAnnee1?: number } | null, base: BudgetDB = db): Promise<void> {
+  const r = await lireReglages(base)
+  const t = { ...(r.tauxBiens ?? {}) }
+  if (valeur) t[categorie] = valeur
+  else delete t[categorie]
+  await modifierReglages({ tauxBiens: t }, base)
 }

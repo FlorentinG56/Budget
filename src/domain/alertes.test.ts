@@ -12,6 +12,10 @@ const base: ParamsAlertes = {
 const textes = (p: Partial<ParamsAlertes>) => calculerAlertes({ ...base, ...p }).map((a) => a.texte.replace(/[  ]/g, ' '))
 
 describe('bandeaux d’alerte', () => {
+  it('fin de garantie d’un bien', () => {
+    expect(textes({ garanties: [{ id: 'b', nom: 'Mac', finGarantie: '2026-12-10' }, { id: 'c', nom: 'TV', finGarantie: '2026-11-29' }] }))
+      .toEqual(['Garantie de Mac : se termine dans 12 jours', 'Garantie de TV : se termine demain'])
+  })
   it('revue de fin de mois', () => {
     expect(textes({ revue: '2026-10' })).toEqual(['Ta revue d’octobre est prête'])
   })

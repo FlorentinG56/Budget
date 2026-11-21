@@ -51,6 +51,7 @@ export interface Operation {
   epargneCompteId?: string // imprévu payé avec l'épargne : compte épargne d'où vient l'argent (virement lié vers le compte principal)
   virementLieId?: string // imprévu payé avec l'épargne : virement épargne → compte principal créé avec la dépense
   lieA?: string // virement créé automatiquement pour une dépense (id de cette dépense)
+  bienId?: string // réparation ou entretien d'un bien (patrimoine)
   creeLe: number // horodatage de saisie
 }
 
@@ -148,6 +149,53 @@ export interface Voyage {
   budget: Centimes // budget total du voyage
 }
 
+// ---------- Patrimoine : biens ----------
+
+export type CategorieBien = 'telephone' | 'ordinateur' | 'tv_audio' | 'vehicule' | 'velo_sport' | 'electromenager' | 'mobilier' | 'outils' | 'bijoux' | 'autres'
+export type EtatBien = 'tres_bon' | 'bon' | 'use' | 'abime' | 'hors_service'
+export type OrigineBien = 'neuf' | 'occasion' | 'cadeau'
+export type MotifSortie = 'vendu' | 'donne' | 'jete' | 'perdu'
+
+export interface ChangementEtat {
+  date: DateISO
+  ancien: EtatBien
+  nouveau: EtatBien
+  note?: string // ex. « écran rayé »
+}
+
+export interface Bien {
+  id: string
+  nom: string
+  categorie: CategorieBien
+  origine: OrigineBien
+  cadeauNeuf?: boolean // cadeau : neuf (prix neuf) ou d'occasion (prix estimé)
+  dateAcquisition: DateISO
+  prixAchat: Centimes // neuf : prix payé ; occasion ou cadeau d'occasion : prix estimé, vétusté comprise
+  devise: Devise
+  photoId?: string
+  note?: string
+  finGarantie?: DateISO
+  numeroSerie?: string
+  factureId?: string // photo de la facture
+  lieu?: 'Canada' | 'France'
+  etat: EtatBien // état actuel
+  historiqueEtat: ChangementEtat[]
+  creditId?: string // charge fixe de type crédit liée (ex. voiture)
+  taux?: number // décote par an en % (sinon : celle de la catégorie) ; véhicule : années suivantes
+  tauxAnnee1?: number // véhicule : décote de la 1re année en %
+  planchePct?: number // plancher en % du prix d'achat (10 par défaut)
+  valeurManuelle?: { montant: Centimes; date: DateISO } // remplace le calcul à partir de cette date
+  sortie?: { motif: MotifSortie; date: DateISO; prixVente?: Centimes; operationId?: string; venteIgnoree?: boolean }
+  creeLe: number
+}
+
+/** Photo compressée (JPEG), stockée uniquement sur l'iPhone. */
+export interface PhotoBien {
+  id: string
+  donnees: string // data URL JPEG
+  taille: number // octets
+}
+
 export interface Reglages {
   id: 'app'
   dureePeriodeJours: number
@@ -172,6 +220,10 @@ export interface Reglages {
   rappelSauvegardeJours: number // « Dernière sauvegarde il y a X jours » au-delà de ce délai
   parcoursAccueil?: 'en_cours' | 'termine' // premier lancement d'un nouvel utilisateur
   revuesVues?: string[] // revues de fin de mois déjà ouvertes ('AAAA-MM')
+  tauxBiens?: Partial<Record<CategorieBien, { taux: number; tauxAnnee1?: number }>> // décotes modifiées dans Réglages
+  seuilBiens?: Centimes // F6 : « L'ajouter à tes biens ? » à partir de ce montant (200 par défaut)
+  affichageBiens?: 'grille' | 'liste'
+  triBiens?: 'valeur' | 'date' | 'nom' | 'categorie'
 }
 
 export const REGLAGES_PAR_DEFAUT: Reglages = {

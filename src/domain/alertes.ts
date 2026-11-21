@@ -21,7 +21,8 @@ export interface Alerte {
   niveau: Niveau
   icone: string
   texte: string
-  cible?: 'calendrier' | 'charges' | 'sauvegarde' | 'periode' | 'analyses' | 'revue'
+  cible?: 'calendrier' | 'charges' | 'sauvegarde' | 'periode' | 'analyses' | 'revue' | 'bien'
+  bienId?: string // garantie d'un bien qui se termine
   mois?: string // revue de fin de mois concernée
   date?: DateISO
 }
@@ -41,6 +42,7 @@ export interface ParamsAlertes {
   maintenant: number
   budgetsCategories?: SuiviBudget[] // budgets mensuels par catégorie (seuils 80 % et 100 %)
   revue?: string // mois dont la revue est prête ('AAAA-MM')
+  garanties?: { id: string; nom: string; finGarantie: DateISO }[] // biens dont la garantie finit dans 30 jours
 }
 
 const quand = (date: DateISO, aujourdhui: DateISO) => {
@@ -111,6 +113,13 @@ export function calculerAlertes(p: ParamsAlertes): Alerte[] {
   // 6. Revue de fin de mois
   if (p.revue) {
     alertes.push({ id: `revue-${p.revue}`, niveau: 'info', icone: '📊', cible: 'revue', mois: p.revue, texte: `Ta revue ${deMois(p.revue)} est prête` })
+  }
+
+  // 6 bis. Fin de garantie d'un bien (30 jours avant, seulement si une date est saisie)
+  for (const g of p.garanties ?? []) {
+    const n = differenceInCalendarDays(parseISO(g.finGarantie), parseISO(p.aujourdhui))
+    alertes.push({ id: `garantie-${g.id}-${g.finGarantie}`, niveau: 'info', icone: '🛡️', cible: 'bien', bienId: g.id, date: g.finGarantie,
+      texte: `Garantie de ${g.nom} : ${n === 0 ? 'se termine aujourd’hui' : n === 1 ? 'se termine demain' : `se termine dans ${n} jours`}` })
   }
 
   // 7. Rappel de sauvegarde (supprimer l'icône de l'app efface ses données)

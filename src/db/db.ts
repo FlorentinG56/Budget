@@ -9,6 +9,8 @@ import {
   type Recurrence,
   type Reglages,
   type Voyage,
+  type Bien,
+  type PhotoBien,
 } from '../domain/types'
 
 /** Base locale IndexedDB : rien ne quitte l'iPhone. */
@@ -21,6 +23,8 @@ export class BudgetDB extends Dexie {
   objectifs!: Table<ObjectifEpargne, string>
   reglages!: Table<Reglages, string>
   voyages!: Table<Voyage, string>
+  biens!: Table<Bien, string>
+  photos!: Table<PhotoBien, string>
 
   constructor(nom = 'budget') {
     super(nom)
@@ -36,6 +40,8 @@ export class BudgetDB extends Dexie {
     })
     // version 2 : ajout des voyages (aucune donnée existante n'est modifiée)
     this.version(2).stores({ voyages: 'id, debut, fin, compteId' })
+    // version 3 : patrimoine (biens et leurs photos), sans modifier les données existantes
+    this.version(3).stores({ biens: 'id, categorie, dateAcquisition', photos: 'id' })
   }
 }
 

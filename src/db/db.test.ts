@@ -4,11 +4,11 @@ import Dexie from 'dexie'
 import { BudgetDB, lireReglages, modifierReglages } from './db'
 
 describe('base locale', () => {
-  it('crée les 8 tables', async () => {
+  it('crée les 10 tables', async () => {
     const base = new BudgetDB('test-tables')
     await base.open()
     expect(base.tables.map((t) => t.name).sort()).toEqual(
-      ['categories', 'comptes', 'objectifs', 'operations', 'periodes', 'recurrences', 'reglages', 'voyages'],
+      ['biens', 'categories', 'comptes', 'objectifs', 'operations', 'periodes', 'photos', 'recurrences', 'reglages', 'voyages'],
     )
     base.close()
   })
@@ -27,7 +27,7 @@ describe('base locale', () => {
   })
 })
 
-describe('mise à jour de la base (version 1 → 2, ajout des voyages)', () => {
+describe('mise à jour de la base (version 1 → 3 : voyages, puis biens et photos)', () => {
   it('les données existantes restent intactes', async () => {
     const v1 = new Dexie('test-migration')
     v1.version(1).stores({ comptes: 'id, ordre, archive', operations: 'id, date, compteId, compteDestinationId, type, categorieId, recurrenceId, [compteId+date]',
@@ -39,11 +39,13 @@ describe('mise à jour de la base (version 1 → 2, ajout des voyages)', () => {
     v1.close()
     const base = new BudgetDB('test-migration')
     await base.open()
-    expect(base.verno).toBe(2)
+    expect(base.verno).toBe(3)
     expect(await base.comptes.toArray()).toEqual([{ id: 'chq', nom: 'Compte', ordre: 0 }])
     expect((await base.operations.get('o'))?.montant).toBe(1250)
     expect((await lireReglages(base)).budgetParPeriode).toBe(42000)
     expect(await base.voyages.count()).toBe(0)
+    expect(await base.biens.count()).toBe(0)
+    expect(await base.photos.count()).toBe(0)
     base.close()
   })
 })

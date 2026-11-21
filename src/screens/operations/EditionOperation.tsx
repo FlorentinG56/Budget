@@ -6,7 +6,7 @@ import { Bouton, Champ, Choix, Groupe, Saisie } from '../../components/formulair
 import { analyserMontant, formaterMontant } from '../../domain/argent'
 import { categoriesPrincipales, sousCategories } from '../../domain/categories'
 import type { Operation } from '../../domain/types'
-import { useCategories, useComptes, useObjectifs, useReglages } from '../../hooks/donnees'
+import { useBiens, useCategories, useComptes, useObjectifs, useReglages } from '../../hooks/donnees'
 import { champsImprevu, choixImprevu, comptesEpargne, projetsEpargne, type ChoixImprevu } from '../../domain/epargne'
 import { Page, useNav } from '../../nav/Navigation'
 
@@ -33,11 +33,13 @@ export function EditionOperation({ id }: { id: string }) {
   const objectifs = useObjectifs()
   const reglages = useReglages()
   const [confirmerSuppression, setConfirmer] = useState(false)
+  const [bienId, setBienId] = useState('')
+  const biens = useBiens()
 
   useEffect(() => {
     if (!op) return
     setMontant(versTexte(op.montant)); setDate(op.date); setCompteId(op.compteId)
-    setCategorieId(op.categorieId ?? ''); setSousCategorieId(op.sousCategorieId ?? ''); setNote(op.note ?? ''); setChoix(choixImprevu(op, reglages?.objectifSecuriteId))
+    setCategorieId(op.categorieId ?? ''); setSousCategorieId(op.sousCategorieId ?? ''); setNote(op.note ?? ''); setChoix(choixImprevu(op, reglages?.objectifSecuriteId)); setBienId(op.bienId ?? '')
   }, [op?.id, !!reglages]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (op === undefined || !comptes || !categories || !reglages) return <Page titre="Opération"><div /></Page>
@@ -66,6 +68,7 @@ export function EditionOperation({ id }: { id: string }) {
       sousCategorieId: avecCategorie ? sousCategorieId || undefined : op.sousCategorieId,
       note: note.trim() || undefined,
       ...(op.type === 'depense' ? champsImprevu(choix, reglages.objectifSecuriteId, compteEpargne?.id) : {}),
+      bienId: avecCategorie ? bienId || undefined : op.bienId,
     })
     retour()
   }
@@ -145,6 +148,17 @@ export function EditionOperation({ id }: { id: string }) {
       })()}
       {op.type === 'depense' && (choix === 'epargne' || choix.startsWith('projet:')) && compteEpargne && (
         <p className="px-1 text-[13px] leading-snug text-encre-pale">Un virement du même montant de {compteEpargne.nom} vers ton compte accompagne cette dépense : fais-le aussi à ta banque.</p>
+      )}
+
+      {avecCategorie && (biens ?? []).some((b) => !b.sortie || b.id === bienId) && (
+        <Groupe>
+          <Champ libelle="Objet" aide="Réparation ou entretien d’un bien (facultatif)">
+            <Choix value={bienId} onChange={(e) => setBienId(e.target.value)} aria-label="Objet">
+              <option value="">Aucun</option>
+              {(biens ?? []).filter((b) => !b.sortie || b.id === bienId).sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((b) => <option key={b.id} value={b.id}>{b.nom}</option>)}
+            </Choix>
+          </Champ>
+        </Groupe>
       )}
 
       <Groupe>

@@ -18,6 +18,7 @@ import { ListeRecurrences } from './reglages/Recurrences'
 import { PeriodeBudget } from './reglages/PeriodeBudget'
 import { ListeVoyages } from './voyages/Voyages'
 import { PageAbonnements } from './analyses/Abonnements'
+import { CategoriesBiens } from './biens/CategoriesBiens'
 import { CHOIX_DELAI_VERROUILLAGE } from '../security/verrouillage'
 import { rechercherMiseAJour, type ResultatMiseAJour } from '../miseAJour'
 
@@ -66,6 +67,7 @@ export function Reglages() {
         <Ligne libelle="Période du budget" surClic={() => nav.ouvrir(<PeriodeBudget />)} />
         <Ligne libelle="Abonnements" surClic={() => nav.ouvrir(<PageAbonnements />)} />
         <Ligne libelle="Voyages" surClic={() => nav.ouvrir(<ListeVoyages />)} />
+        <Ligne libelle="Catégories de biens" surClic={() => nav.ouvrir(<CategoriesBiens />)} />
       </Groupe>
 
       <TitreSection>Alertes</TitreSection>

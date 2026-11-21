@@ -7,7 +7,7 @@ const ONGLETS: { id: Onglet; libelle: string; Icone: ComponentType<{ taille?: nu
   { id: 'accueil', libelle: 'Accueil', Icone: IconeAccueil },
   { id: 'calendrier', libelle: 'Calendrier', Icone: IconeCalendrier },
   { id: 'analyses', libelle: 'Analyses', Icone: IconeAnalyses },
-  { id: 'epargne', libelle: 'Épargne', Icone: IconeEpargne },
+  { id: 'epargne', libelle: 'Patrimoine', Icone: IconeEpargne },
   { id: 'reglages', libelle: 'Réglages', Icone: IconeReglages },
 ]
 

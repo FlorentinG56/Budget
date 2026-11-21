@@ -82,3 +82,22 @@ Complète le cahier des charges. Formulées de façon générale : aucune donné
 | Comparaison des catégories | Avec la période précédente et avec la moyenne des périodes précédentes de même durée (jusqu'à 3, le nombre réellement utilisé est affiché) ; la couleur suit la moyenne, un trait la marque sur la barre |
 | Mois par mois | Dépenses du quotidien (hors charges fixes) des 6 derniers mois, 12 en option ; toucher un mois ouvre l'analyse mensuelle. Barres au contraste ≥ 3:1, mois affiché en plus foncé |
 | Top et dépenses à classer | 5 plus grosses dépenses de la période affichée ; dépenses sans catégorie signalées avec une liste pour les classer |
+
+## Patrimoine
+
+| Sujet | Décision |
+| --- | --- |
+| Onglet | « Épargne » devient « Patrimoine » : valeur nette en haut, puis trois sections au choix (Épargne, Dettes, Biens) ; la section choisie est gardée pendant la session |
+| Valeur nette | Par devise, sans conversion : épargne (solde réel des comptes épargne, sans la sécurité) + valeur actuelle des biens actifs − capital restant dû des crédits |
+| Base de données version 3 | Ajout des tables des biens et des photos, sans modifier les données existantes (test de migration). Les biens sont dans la sauvegarde ; une sauvegarde plus ancienne se restaure toujours |
+| Fiche d'un bien | Nom, catégorie, origine (acheté neuf, d'occasion, cadeau neuf ou d'occasion), date d'acquisition, prix (prix d'achat ; prix neuf pour un cadeau neuf ; prix estimé, vétusté comprise, sinon), devise, photo, note. Facultatif : fin de garantie, numéro de série, photo de la facture, lieu, crédit lié, décote et plancher propres, valeur saisie à la main |
+| État | Très bon, Bon, Usé, Abîmé, Hors service ; choisi à la création, puis changé avec « Changer » (date, note) : historique conservé, la valeur suit l'état à chaque date |
+| Calcul de la valeur | prix × (1 − décote)^années × coefficient d'état, jamais sous le plancher (10 % par défaut). Années au jour près (jours ÷ 365,25). Véhicule : décote de la 1re année sur la première année, puis celle des années suivantes. Décote du bien, sinon celle de la catégorie (Réglages → Catégories de biens), sinon la valeur par défaut |
+| Valeur saisie à la main | Remplace le calcul à partir de sa date ; « Revenir au calcul automatique » la supprime |
+| Réparations et entretien | Champ facultatif « Objet » dans l'écran de confirmation de la saisie et dans l'édition d'une dépense (ou d'un prélèvement). La fiche liste ces dépenses, leur total et le coût total (prix + réparations) ; la valeur estimée ne change pas. Supprimer un bien garde les dépenses, sans lien |
+| Crédit lié | Une charge fixe de type crédit peut être liée : la fiche affiche son capital restant dû et la valeur nette de l'objet (valeur − capital restant dû) |
+| Garantie | Bandeau sur l'accueil dans les 30 jours avant la fin, seulement si une date est saisie ; il ouvre la fiche du bien |
+| Photos | Prise de photo ou photothèque (champ fichier iOS), compressées sur l'iPhone : 1 600 px de côté au plus, JPEG d'environ 300 Ko (qualité baissée si besoin). Stockées dans la base de l'iPhone, jamais envoyées ailleurs. Une photo remplacée ou retirée est supprimée |
+| Sortie d'un bien | « Ce bien n'est plus à moi » : vendu (prix de vente obligatoire), donné, jeté / cassé, perdu / volé, avec la date. Le bien passe dans « Archivés », consultable et réactivable ; il ne compte plus dans les totaux à partir de cette date |
+| Vente | La fiche montre le gain ou la perte par rapport à la valeur estimée juste avant la vente et par rapport au prix d'achat. Puis « Ajouter [prix] au solde de [compte] ? » : Ajouter (revenu daté de la vente, compte au choix parmi ceux de la même devise, catégorie « Vente » créée au besoin) ou Ignorer. Jamais automatique, une seule fois |
+| Catégories de biens | Liste fixe de 10 catégories ; décotes modifiables dans Réglages → Catégories de biens (ou par bien), avec retour au défaut |

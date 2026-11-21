@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
 import { calculerAlertes, type Alerte } from '../domain/alertes'
 import { useBudget } from '../hooks/budget'
-import { useCategories, useReglages } from '../hooks/donnees'
+import { useBiens, useCategories, useReglages } from '../hooks/donnees'
 import { suiviBudgets } from '../domain/budgetsCategories'
 import { revueAAnnoncer } from '../domain/revue'
+import { garantiesBientotFinies } from '../domain/biens'
+import { PageBien } from '../screens/biens/Biens'
 import { PageRevue } from '../screens/analyses/Revue'
 import { calculerProjection } from '../hooks/projection'
 import { useNav } from '../nav/Navigation'
@@ -30,6 +32,7 @@ export function BandeauAlertes() {
   const { ctx, etat } = useBudget()
   const reglages = useReglages()
   const categories = useCategories()
+  const biens = useBiens()
   const [masquees, setMasquees] = useState(lireMasquees)
   const [sauvegarde, setSauvegarde] = useState(0) // > 0 : feuille « Sauvegarder maintenant » ouverte (recréée à chaque ouverture)
 
@@ -45,8 +48,9 @@ export function BandeauAlertes() {
       maintenant: Date.now(),
       budgetsCategories: categories ? suiviBudgets(categories, ctx.operations, ctx.budget, ctx.date) : undefined,
       revue: revueAAnnoncer(ctx.date, ctx.operations, ctx.budget, reglages.revuesVues ?? []),
+      garanties: biens ? garantiesBientotFinies(biens, ctx.date).map((b) => ({ id: b.id, nom: b.nom, finGarantie: b.finGarantie! })) : undefined,
     })
-  }, [ctx, etat, reglages, categories])
+  }, [ctx, etat, reglages, categories, biens])
 
   const visibles = alertes.filter((a) => masquees[a.id] !== ctx?.date)
   const feuille = (
@@ -72,6 +76,7 @@ export function BandeauAlertes() {
     else if (a.cible === 'sauvegarde') nav.ouvrir(<PageSauvegarde />)
     else if (a.cible === 'analyses') nav.changerOnglet('analyses')
     else if (a.cible === 'revue' && a.mois) nav.ouvrir(<PageRevue mois={a.mois} />)
+    else if (a.cible === 'bien' && a.bienId) nav.ouvrir(<PageBien id={a.bienId} />)
   }
 
   return (

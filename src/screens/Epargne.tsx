@@ -5,7 +5,7 @@ import { db } from '../db/db'
 import { Feuille } from '../components/Feuille'
 import { Bouton, Champ, Choix, Groupe, Interrupteur, Saisie } from '../components/formulaire'
 import { IconeChevron } from '../components/Icones'
-import { Ecran, TitreSection } from '../components/ui'
+import { TitreSection } from '../components/ui'
 import { ChampMontant, lireMontant, versTexteMontant } from '../budget/ChampMontant'
 import { formaterMontant } from '../domain/argent'
 import { aujourdhui, libelleCourt } from '../domain/dates'
@@ -32,14 +32,15 @@ function Barre({ valeur }: { valeur: number }) {
   )
 }
 
-export function Epargne() {
+/** Section « Épargne » de l'onglet Patrimoine : total réel des comptes épargne et projets. */
+export function SectionEpargne() {
   const nav = useNav()
   const objectifs = useObjectifs()
   const comptes = useComptes()
   const operations = useOperations()
   const reglages = useReglages()
   const [organiser, setOrganiser] = useState(false)
-  if (!objectifs || !comptes || !operations || !reglages) return <Ecran titre="Épargne"><div /></Ecran>
+  if (!objectifs || !comptes || !operations || !reglages) return null
 
   const date = aujourdhui()
   const mapComptes = indexer(comptes)
@@ -88,9 +89,7 @@ export function Epargne() {
   }
 
   return (
-    <Ecran titre="Épargne" action={epargnes.length > 0 ? (
-      <button type="button" onClick={() => nav.ouvrir(<EditionObjectif />)} className="min-h-[44px] pb-1 text-[17px] font-semibold text-bleu">Nouveau projet</button>
-    ) : undefined}>
+    <>
       <ConversionEpargne />
 
       {epargnes.length === 0 ? (
@@ -127,14 +126,13 @@ export function Epargne() {
           )}
         </div>
         {projets.length > 0 ? <Groupe>{projets.map((o, i) => ligne(o, i, projets))}</Groupe> : (
-          <p className="px-1 text-[15px] leading-snug text-encre-douce">Aucun projet. Touche « Nouveau projet » pour en créer un (PS5, voyage…).</p>
+          <p className="px-1 text-[15px] leading-snug text-encre-douce">Aucun projet pour l’instant.</p>
         )}
+        <button type="button" onClick={() => nav.ouvrir(<EditionObjectif />)} className="min-h-[46px] rounded-[12px] bg-white text-[16px] font-semibold text-bleu shadow-carte active:bg-fond">+ Nouveau projet</button>
       </>)}
 
-      <SectionDettes />
-
       {termines.length > 0 && (<><TitreSection>Projets terminés</TitreSection><Groupe>{termines.map((o, i) => ligne(o, i, termines))}</Groupe></>)}
-    </Ecran>
+    </>
   )
 }
 
@@ -379,19 +377,18 @@ function TexteRythme({ rythme, devise }: { rythme: Rythme; devise: Devise }) {
 }
 
 /** Crédits en cours : capital restant dû, progression, dernière mensualité, mensualités restantes ; total par devise. */
-function SectionDettes() {
+export function SectionDettes() {
   const nav = useNav()
   const recurrences = useRecurrences()
   const operations = useOperations()
   const comptes = useComptes(true)
   if (!recurrences || !operations || !comptes) return null
   const liste = dettes(recurrences, operations, comptes, aujourdhui())
-  if (liste.length === 0) return null
+  if (liste.length === 0) return <p className="px-1 text-[15px] leading-snug text-encre-douce">Aucun crédit en cours. Les crédits se créent dans Réglages → Charges fixes et crédits.</p>
   const totaux = totalDettes(liste)
   const noms = indexer(comptes)
   return (
     <>
-      <TitreSection>Dettes</TitreSection>
       <Groupe>
         {liste.map((d) => (
           <button key={d.recurrence.id} type="button" onClick={() => nav.ouvrir(<ListeRecurrences genre="charges" />)} className="block w-full px-4 py-3 text-left active:bg-fond">

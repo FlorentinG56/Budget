@@ -6,7 +6,7 @@ import { libelleJour } from '../domain/dates'
 import { champsImprevu, choixImprevu, comptesEpargne, projetsEpargne, soldeObjectif, type ChoixImprevu } from '../domain/epargne'
 import type { Categorie, Operation } from '../domain/types'
 import { useBudget } from '../hooks/budget'
-import { indexer, useObjectifs, useReglages } from '../hooks/donnees'
+import { indexer, useBiens, useObjectifs, useReglages } from '../hooks/donnees'
 
 /** Écran « Enregistré » : sous-catégorie, note, imprévu (payé avec le solde, la sécurité ou l'épargne), ajout à l'enveloppe, annulation. */
 export function Confirmation({ op, categories, devise, nomCompte, surFermer, surMaj }: {
@@ -17,6 +17,7 @@ export function Confirmation({ op, categories, devise, nomCompte, surFermer, sur
   const [ajoute, setAjoute] = useState(false)
   const objectifs = useObjectifs()
   const reglages = useReglages()
+  const biens = useBiens()
   // « Imprévu, payé comment ? » : solde (ou carte), sécurité, épargne (et un projet)
   const compteOp = ctx?.comptes.find((c) => c.id === op.compteId)
   const comptePrincipal = compteOp?.type === 'carte_credit' ? compteOp.compteRemboursementId : op.compteId
@@ -122,6 +123,17 @@ export function Confirmation({ op, categories, devise, nomCompte, surFermer, sur
             {(choix === 'epargne' || choix.startsWith('projet:')) && compteEpargne && <> Un virement de {formaterMontant(op.montant, devise)} de {compteEpargne.nom} vers ton compte est enregistré : <b className="text-encre">fais-le aussi à ta banque</b>.</>}
           </p>}
         </div>
+      )}
+
+      {op.type === 'depense' && (biens ?? []).some((b) => !b.sortie) && (
+        <label className="relative flex min-h-[46px] items-center justify-between gap-2 rounded-[12px] bg-white px-4 text-[15px] shadow-carte">
+          <span className="text-encre-douce">🔧 Objet (réparation, entretien)</span>
+          <span className="max-w-[45%] truncate font-medium text-encre">{(biens ?? []).find((b) => b.id === op.bienId)?.nom ?? 'Aucun'}</span>
+          <select value={op.bienId ?? ''} onChange={(e) => void maj({ bienId: e.target.value || undefined })} className="absolute inset-0 opacity-0" aria-label="Objet">
+            <option value="">Aucun</option>
+            {(biens ?? []).filter((b) => !b.sortie).sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((b) => <option key={b.id} value={b.id}>{b.nom}</option>)}
+          </select>
+        </label>
       )}
 
       {op.type === 'depense' && (

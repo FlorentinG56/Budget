@@ -43,6 +43,20 @@ describe('sauvegarde et restauration', () => {
     expect((await cible.voyages.toArray()).map((v) => v.nom)).toEqual(['Voyage'])
     source.close(); cible.close()
   })
+  it('sauvegarde et restaure les biens ; une sauvegarde plus ancienne se restaure toujours', async () => {
+    const source = new BudgetDB('test-biens-src')
+    await preparerUtilisateur(source)
+    await source.biens.add({ id: 'b', nom: 'Mac', categorie: 'ordinateur', origine: 'neuf', dateAcquisition: '2026-01-10', prixAchat: 250000, devise: 'CAD', etat: 'bon', historiqueEtat: [], creeLe: 1 })
+    const contenu = await exporterDonnees(source)
+    expect(contenu.tables.biens).toHaveLength(1)
+    const ancienne = { ...contenu, tables: { ...contenu.tables } }; delete ancienne.tables.biens
+    const cible = new BudgetDB('test-biens-cible')
+    await restaurerDonnees(validerContenu(JSON.stringify(contenu)), cible)
+    expect((await cible.biens.toArray()).map((b) => b.nom)).toEqual(['Mac'])
+    await restaurerDonnees(validerContenu(JSON.stringify(ancienne)), cible)
+    expect(await cible.biens.count()).toBe(0)
+    source.close(); cible.close()
+  })
   it('refuse un contenu invalide', () => {
     expect(() => validerContenu('{"schema":2}')).toThrow()
     expect(() => validerContenu('{"schema":1,"tables":{"comptes":[]}}')).toThrow()
