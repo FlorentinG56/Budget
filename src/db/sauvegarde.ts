@@ -1,4 +1,4 @@
-import type { Bien, Reglages, Voyage } from '../domain/types'
+import type { Bien, PhotoBien, Reglages, Voyage } from '../domain/types'
 import { db, lireReglages, modifierReglages, type BudgetDB } from './db'
 
 /** Contenu d'une sauvegarde (avant chiffrement). Le code PIN et l'état du verrouillage ne sont jamais sauvegardés. */
@@ -10,27 +10,30 @@ export interface ContenuSauvegarde {
     periodes: unknown[]; objectifs: unknown[]; reglages: Partial<Reglages>
     voyages?: unknown[] // absent des sauvegardes créées avant le mode voyage
     biens?: unknown[] // absent des sauvegardes créées avant le patrimoine
+    photos?: unknown[] // absent si « Inclure les photos » était décoché
   }
 }
 
 const SECURITE: (keyof Reglages)[] = ['pinHash', 'pinSel', 'pinIterations', 'echecsPin', 'bloqueJusqua', 'faceIdActive', 'faceIdIdentifiant']
 const TABLES = ['comptes', 'operations', 'recurrences', 'categories', 'periodes', 'objectifs'] as const
-const TABLES_FACULTATIVES = ['voyages', 'biens'] as const
+const TABLES_FACULTATIVES = ['voyages', 'biens', 'photos'] as const
 
-export async function exporterDonnees(base: BudgetDB = db, maintenant = new Date()): Promise<ContenuSauvegarde> {
-  return base.transaction('r', [...TABLES.map((t) => base[t]), base.voyages, base.biens, base.reglages], async () => {
+export async function exporterDonnees(base: BudgetDB = db, maintenant = new Date(), options: { photos?: boolean } = {}): Promise<ContenuSauvegarde> {
+  return base.transaction('r', [...TABLES.map((t) => base[t]), base.voyages, base.biens, base.photos, base.reglages], async () => {
     const reglages: Partial<Reglages> = { ...(await lireReglages(base)) }
     for (const k of SECURITE) delete reglages[k]
     const [comptes, operations, recurrences, categories, periodes, objectifs] = await Promise.all(TABLES.map((t) => base[t].toArray()))
     const voyages = await base.voyages.toArray()
     const biens = await base.biens.toArray()
-    return { schema: 1, exporteLe: maintenant.toISOString(), tables: { comptes, operations, recurrences, categories, periodes, objectifs, voyages, biens, reglages } }
+    const photos = options.photos === false ? undefined : await base.photos.toArray()
+    return { schema: 1, exporteLe: maintenant.toISOString(), tables: { comptes, operations, recurrences, categories, periodes, objectifs, voyages, biens, ...(photos ? { photos } : {}), reglages } }
   })
 }
 
 /** Petit résumé lisible d'une sauvegarde (avant de la restaurer). */
 export function resumerSauvegarde(c: ContenuSauvegarde) {
-  return { comptes: c.tables.comptes.length, operations: c.tables.operations.length, objectifs: c.tables.objectifs.length, exporteLe: c.exporteLe }
+  return { comptes: c.tables.comptes.length, operations: c.tables.operations.length, objectifs: c.tables.objectifs.length, biens: c.tables.biens?.length ?? 0,
+    photos: c.tables.photos?.length, exporteLe: c.exporteLe }
 }
 
 export function validerContenu(texte: string): ContenuSauvegarde {
@@ -46,7 +49,7 @@ export function validerContenu(texte: string): ContenuSauvegarde {
  * Le code PIN et Face ID de cet appareil sont conservés.
  */
 export async function restaurerDonnees(c: ContenuSauvegarde, base: BudgetDB = db): Promise<void> {
-  await base.transaction('rw', [...TABLES.map((t) => base[t]), base.voyages, base.biens, base.reglages], async () => {
+  await base.transaction('rw', [...TABLES.map((t) => base[t]), base.voyages, base.biens, base.photos, base.reglages], async () => {
     for (const t of TABLES) {
       await base[t].clear()
       await (base[t] as unknown as { bulkAdd: (x: unknown[]) => Promise<unknown> }).bulkAdd(c.tables[t])
@@ -55,6 +58,9 @@ export async function restaurerDonnees(c: ContenuSauvegarde, base: BudgetDB = db
     await base.voyages.bulkAdd((c.tables.voyages ?? []) as Voyage[])
     await base.biens.clear()
     await base.biens.bulkAdd((c.tables.biens ?? []) as Bien[])
+    // photos : celles de la sauvegarde ; une sauvegarde sans photos garde celles de cet iPhone encore utilisées
+    if (c.tables.photos) { await base.photos.clear(); await base.photos.bulkAdd(c.tables.photos as PhotoBien[]) }
+    await nettoyerPhotos(base)
     const actuels = await lireReglages(base)
     const garder: Partial<Reglages> = {}
     for (const k of SECURITE) if (actuels[k] !== undefined) (garder as Record<string, unknown>)[k] = actuels[k]
@@ -63,4 +69,19 @@ export async function restaurerDonnees(c: ContenuSauvegarde, base: BudgetDB = db
     await base.reglages.clear()
     await modifierReglages({ ...restaures, ...garder, donneesInitialisees: true }, base)
   })
+}
+
+/** Supprime les photos qui ne sont plus utilisées par aucun bien (photo ou facture). */
+export async function nettoyerPhotos(base: BudgetDB = db): Promise<number> {
+  return base.transaction('rw', base.biens, base.photos, async () => {
+    const utilisees = new Set((await base.biens.toArray()).flatMap((b) => [b.photoId, b.factureId]).filter(Boolean))
+    const orphelines = (await base.photos.toCollection().primaryKeys()).filter((id) => !utilisees.has(id))
+    await base.photos.bulkDelete(orphelines)
+    return orphelines.length
+  })
+}
+
+/** Taille estimée du fichier de sauvegarde chiffré (base64 : ×4/3), en octets. */
+export function estimerTailleSauvegarde(octetsDonnees: number, octetsPhotos: number): number {
+  return Math.ceil((octetsDonnees + octetsPhotos) * 4 / 3) + 400
 }

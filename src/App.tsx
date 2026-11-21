@@ -3,6 +3,7 @@ import { BarreOnglets, type Onglet } from './components/BarreOnglets'
 import { Feuille } from './components/Feuille'
 import { EcheancesCtx } from './components/BandeauEcheances'
 import { genererEcheances, initialiserDonnees, synchroniserSecurite, terminerAccueil } from './db/actions'
+import { nettoyerPhotos } from './db/sauvegarde'
 import { ParcoursAccueil } from './accueil/ParcoursAccueil'
 import type { Operation } from './domain/types'
 import { NavCtx, type Nav } from './nav/Navigation'
@@ -57,6 +58,7 @@ export default function App() {
       if (!pret) {
         if ((await initialiserDonnees()) === 'nouveau') { setAccueil(true); setPret(true); return }
         await synchroniserSecurite()
+        await nettoyerPhotos() // photos choisies dans un formulaire abandonné
       }
       const creees = await genererEcheances()
       if (creees.length) setRecentes((r) => [...r, ...creees])

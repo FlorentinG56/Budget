@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { db, modifierReglages } from "../../db/db"
-import { exporterDonnees, restaurerDonnees, resumerSauvegarde, validerContenu, type ContenuSauvegarde } from '../../db/sauvegarde'
+import { estimerTailleSauvegarde, exporterDonnees, restaurerDonnees, resumerSauvegarde, validerContenu, type ContenuSauvegarde } from '../../db/sauvegarde'
 import { Bouton, Groupe } from '../../components/formulaire'
 import { TitreSection } from '../../components/ui'
 import { operationsVersCsv } from '../../domain/csv'
@@ -70,11 +70,22 @@ export function FormulaireSauvegarde({ surReussite }: { surReussite?: () => void
   const [etat, setEtat] = useState<'' | 'en_cours' | 'ok' | 'annule'>('')
   const [erreur, setErreur] = useState('')
   const valide = mdp.length >= LONGUEUR_MIN_MOT_DE_PASSE && mdp === confirmation
+  const [photos, setPhotos] = useState(true) // « Inclure les photos », cochée par défaut
+  const [tailles, setTailles] = useState<{ donnees: number; photos: number; nombre: number } | null>(null)
+  useEffect(() => {
+    let actif = true
+    void (async () => {
+      const donnees = new Blob([JSON.stringify(await exporterDonnees(db, new Date(), { photos: false }))]).size
+      const liste = await db.photos.toArray()
+      if (actif) setTailles({ donnees, photos: liste.reduce((t, p) => t + p.donnees.length + 80, 0), nombre: liste.length })
+    })()
+    return () => { actif = false }
+  }, [])
 
   const creer = async () => {
     setErreur(''); setEtat('en_cours')
     try {
-      const fichier = await chiffrer(JSON.stringify(await exporterDonnees()), mdp)
+      const fichier = await chiffrer(JSON.stringify(await exporterDonnees(db, new Date(), { photos })), mdp)
       const ok = await enregistrerFichier(`budget-sauvegarde-${aujourdhui()}.json`, JSON.stringify(fichier), 'application/json')
       if (ok) { await modifierReglages({ derniereSauvegarde: Date.now() }); setEtat('ok'); setMdp(''); setConfirmation(''); surReussite?.() }
       else setEtat('annule')
@@ -88,6 +99,13 @@ export function FormulaireSauvegarde({ surReussite }: { surReussite?: () => void
         <input type="password" autoComplete="new-password" value={mdp} onChange={(e) => { setMdp(e.target.value); setEtat('') }} placeholder={`Mot de passe (${LONGUEUR_MIN_MOT_DE_PASSE} caractères min.)`} aria-label="Mot de passe de la sauvegarde" className={champ} />
         <input type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} placeholder="Confirme le mot de passe" aria-label="Confirmation du mot de passe" className={champ} />
         {confirmation && mdp !== confirmation && <p className="px-1 text-[13px] text-rouge">Les deux mots de passe ne correspondent pas.</p>}
+        {tailles && tailles.nombre > 0 && (
+          <label className="flex min-h-[46px] items-center gap-3 rounded-[12px] bg-white px-3 text-[16px] shadow-carte">
+            <input type="checkbox" checked={photos} onChange={(e) => setPhotos(e.target.checked)} className="h-5 w-5 accent-bleu" />
+            <span className="flex-1 text-encre">Inclure les photos <span className="text-encre-pale">({tailles.nombre})</span></span>
+          </label>
+        )}
+        {tailles && <p className="px-1 text-[13px] text-encre-douce">Taille estimée du fichier : {texteTaille(estimerTailleSauvegarde(tailles.donnees, photos ? tailles.photos : 0))}</p>}
         <p className="px-1 text-[13px] leading-snug text-encre-pale">
           ⚠️ Note ce mot de passe en lieu sûr : sans lui, la sauvegarde est illisible, et personne ne peut la récupérer. Il est différent de ton code à 6 chiffres.
         </p>
@@ -97,6 +115,11 @@ export function FormulaireSauvegarde({ surReussite }: { surReussite?: () => void
         {erreur && <p className="px-1 text-[14px] text-rouge">{erreur}</p>}
       </div>
   )
+}
+
+function texteTaille(octets: number): string {
+  if (octets < 1024 * 1024) return `${Math.max(1, Math.round(octets / 1024))} Ko`
+  return `${(octets / 1024 / 1024).toFixed(1).replace('.', ',')} Mo`
 }
 
 function Restaurer() {
@@ -140,7 +163,7 @@ function Restaurer() {
         </>)}
         {r && (
           <div className="rounded-carte border border-rouge/25 bg-rouge-pale p-4">
-            <p className="text-[15px] text-encre">Sauvegarde du <b>{libelleCourt(r.exporteLe.slice(0, 10))}</b> : {r.comptes} comptes, {r.operations} opérations, {r.objectifs} objectifs d’épargne.</p>
+            <p className="text-[15px] text-encre">Sauvegarde du <b>{libelleCourt(r.exporteLe.slice(0, 10))}</b> : {r.comptes} comptes, {r.operations} opérations, {r.objectifs} objectifs d’épargne{r.biens ? `, ${r.biens} biens` : ''}{r.photos ? `, ${r.photos} photos` : r.biens ? ' (sans photos : celles de cet iPhone sont gardées)' : ''}.</p>
             <p className="mt-1 text-[14px] font-semibold text-rouge">Toutes les données actuelles de cet iPhone seront remplacées.</p>
             <Bouton className="mt-3 !bg-rouge" disabled={occupe} onClick={() => void restaurer()}>Remplacer et restaurer</Bouton>
           </div>

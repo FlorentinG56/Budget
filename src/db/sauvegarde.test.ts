@@ -4,7 +4,7 @@ import { chiffrer, dechiffrer } from '../security/sauvegarde'
 import {enregistrerOperation } from './actions'
 import { preparerUtilisateur } from './testUtils'
 import { BudgetDB, lireReglages, modifierReglages } from './db'
-import { exporterDonnees, restaurerDonnees, validerContenu } from './sauvegarde'
+import { estimerTailleSauvegarde, exporterDonnees, restaurerDonnees, resumerSauvegarde, validerContenu } from './sauvegarde'
 
 describe('sauvegarde et restauration', () => {
   it('aller-retour complet, sans le code PIN, en gardant le code de l’appareil', async () => {
@@ -56,6 +56,27 @@ describe('sauvegarde et restauration', () => {
     await restaurerDonnees(validerContenu(JSON.stringify(ancienne)), cible)
     expect(await cible.biens.count()).toBe(0)
     source.close(); cible.close()
+  })
+  it('photos : incluses ou non ; une sauvegarde sans photos garde celles de l’iPhone encore utilisées', async () => {
+    const source = new BudgetDB('test-photos-src')
+    await preparerUtilisateur(source)
+    await source.photos.bulkAdd([{ id: 'p1', donnees: 'data:image/jpeg;base64,AAAA', taille: 3 }, { id: 'p2', donnees: 'data:x', taille: 1 }])
+    await source.biens.add({ id: 'b', nom: 'Mac', categorie: 'ordinateur', origine: 'neuf', dateAcquisition: '2026-01-10', prixAchat: 250000, devise: 'CAD', etat: 'bon', historiqueEtat: [], photoId: 'p1', creeLe: 1 })
+    const avec = await exporterDonnees(source)
+    const sans = await exporterDonnees(source, new Date(), { photos: false })
+    expect(avec.tables.photos).toHaveLength(2)
+    expect(sans.tables.photos).toBeUndefined()
+    expect(resumerSauvegarde(avec)).toMatchObject({ biens: 1, photos: 2 })
+    const cible = new BudgetDB('test-photos-cible')
+    await restaurerDonnees(validerContenu(JSON.stringify(avec)), cible)
+    expect((await cible.photos.toArray()).map((p) => p.id)).toEqual(['p1']) // p2 n'était utilisée par aucun bien
+    await cible.photos.add({ id: 'p3', donnees: 'data:y', taille: 1 })
+    await restaurerDonnees(validerContenu(JSON.stringify(sans)), cible)
+    expect((await cible.photos.toArray()).map((p) => p.id)).toEqual(['p1'])
+    source.close(); cible.close()
+  })
+  it('taille estimée de la sauvegarde', () => {
+    expect(estimerTailleSauvegarde(3000, 300000)).toBe(404400)
   })
   it('refuse un contenu invalide', () => {
     expect(() => validerContenu('{"schema":2}')).toThrow()
