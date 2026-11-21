@@ -151,3 +151,20 @@ describe('F5 : courbe et tri', () => {
     expect(ids('categorie')).toEqual(['tel', 'mac', 'tv'])
   })
 })
+
+describe('F6 : proposer d’ajouter une dépense aux biens', () => {
+  it('au moins 200 $, catégories concernées, pas les réparations ni l’essence', async () => {
+    const { proposerAuxBiens } = await import('./biens')
+    const d = (p: object) => ({ type: 'depense' as const, montant: 25000, categorieId: 'shopping', ...p })
+    expect(proposerAuxBiens(d({}))).toBe(true)
+    expect(proposerAuxBiens(d({ montant: 20000 }))).toBe(true)
+    expect(proposerAuxBiens(d({ montant: 19999 }))).toBe(false)
+    expect(proposerAuxBiens(d({ montant: 19999 }), 15000)).toBe(true)
+    for (const c of ['transport', 'activite-pro', 'loisirs']) expect(proposerAuxBiens(d({ categorieId: c }))).toBe(true)
+    expect(proposerAuxBiens(d({ categorieId: 'alimentation' }))).toBe(false)
+    expect(proposerAuxBiens(d({ categorieId: undefined }))).toBe(false)
+    expect(proposerAuxBiens(d({ categorieId: 'transport', sousCategorieId: 'transport/entretien-reparations' }))).toBe(false)
+    expect(proposerAuxBiens(d({ bienId: 'x' }))).toBe(false)
+    expect(proposerAuxBiens(d({ type: 'revenu' }))).toBe(false)
+  })
+})

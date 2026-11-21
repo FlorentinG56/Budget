@@ -206,3 +206,17 @@ export function trierBiens(biens: Bien[], tri: TriBiens, date: DateISO, reglages
     }
   })
 }
+
+// ---------- F6 : « L'ajouter à tes biens ? » après une dépense ----------
+
+/** Catégories (principales) où une grosse dépense est proposée aux biens. */
+export const CATEGORIES_PROPOSEES_AUX_BIENS = ['shopping', 'transport', 'activite-pro', 'loisirs']
+/** Sous-catégories exclues : une réparation se rattache à un bien existant (champ « Objet »), ce n'est pas un nouveau bien. */
+export const SOUS_CATEGORIES_EXCLUES = ['transport/entretien-reparations', 'transport/essence', 'transport/stationnement', 'transport/transport-en-commun', 'transport/taxi-uber']
+
+/** Proposer d'ajouter la dépense aux biens : dépense d'au moins le seuil, catégorie concernée, pas déjà une réparation. */
+export function proposerAuxBiens(op: Pick<import('./types').Operation, 'type' | 'montant' | 'categorieId' | 'sousCategorieId' | 'bienId'>, seuil: Centimes = SEUIL_BIENS_DEFAUT): boolean {
+  if (op.type !== 'depense' || op.montant < seuil || op.bienId || !op.categorieId) return false
+  if (op.sousCategorieId && SOUS_CATEGORIES_EXCLUES.includes(op.sousCategorieId)) return false
+  return CATEGORIES_PROPOSEES_AUX_BIENS.includes(op.categorieId)
+}

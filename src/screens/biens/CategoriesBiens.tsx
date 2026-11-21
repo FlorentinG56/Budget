@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { Feuille } from '../../components/Feuille'
-import { Bouton, Groupe } from '../../components/formulaire'
+import { Bouton, Champ, Groupe, Saisie } from '../../components/formulaire'
+import { TitreSection } from '../../components/ui'
+import { lireMontant, versTexteMontant } from '../../budget/ChampMontant'
+import { modifierReglages } from '../../db/db'
 import { IconeChevron } from '../../components/Icones'
 import { modifierTauxCategorie } from '../../db/actions'
-import { CATEGORIES_BIENS, tauxDuBien, type InfoCategorieBien } from '../../domain/biens'
+import { CATEGORIES_BIENS, SEUIL_BIENS_DEFAUT, tauxDuBien, type InfoCategorieBien } from '../../domain/biens'
 import { useReglages } from '../../hooks/donnees'
 import { Page } from '../../nav/Navigation'
 
@@ -31,8 +34,31 @@ export function CategoriesBiens() {
           )
         })}
       </Groupe>
+      <SeuilBiens />
       <FeuilleTaux categorie={ouverte} surFermer={() => setOuverte(null)} />
     </Page>
+  )
+}
+
+/** Seuil de « L'ajouter à tes biens ? » après une dépense (Shopping, Transport, Activité pro, Loisirs). */
+function SeuilBiens() {
+  const reglages = useReglages()
+  const [texte, setTexte] = useState<string | null>(null)
+  if (!reglages) return null
+  const actuel = reglages.seuilBiens ?? SEUIL_BIENS_DEFAUT
+  const valeur = texte === null ? versTexteMontant(actuel) : texte
+  const montant = lireMontant(valeur)
+  return (
+    <>
+      <TitreSection>Après une dépense</TitreSection>
+      <Groupe>
+        <Champ libelle="Proposer à partir de" aide={montant === null ? 'Montant invalide' : 'Shopping, Transport, Activité pro, Loisirs'}>
+          <Saisie inputMode="decimal" value={valeur} onChange={(e) => setTexte(e.target.value)} aria-label="Seuil pour proposer d’ajouter aux biens"
+            onBlur={() => { if (montant && montant !== actuel) void modifierReglages({ seuilBiens: montant }); setTexte(null) }} />
+        </Champ>
+      </Groupe>
+      <p className="px-1 text-[12px] leading-snug text-encre-pale">« L’ajouter à tes biens ? » est proposé après une dépense d’au moins ce montant dans ces catégories (pas pour l’essence, le stationnement, les transports ni les réparations).</p>
+    </>
   )
 }
 

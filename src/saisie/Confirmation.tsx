@@ -7,6 +7,9 @@ import { champsImprevu, choixImprevu, comptesEpargne, projetsEpargne, soldeObjec
 import type { Categorie, Operation } from '../domain/types'
 import { useBudget } from '../hooks/budget'
 import { indexer, useBiens, useObjectifs, useReglages } from '../hooks/donnees'
+import { SEUIL_BIENS_DEFAUT, proposerAuxBiens } from '../domain/biens'
+import { useNav } from '../nav/Navigation'
+import { EditionBien } from '../screens/biens/Biens'
 
 /** Écran « Enregistré » : sous-catégorie, note, imprévu (payé avec le solde, la sécurité ou l'épargne), ajout à l'enveloppe, annulation. */
 export function Confirmation({ op, categories, devise, nomCompte, surFermer, surMaj }: {
@@ -18,6 +21,8 @@ export function Confirmation({ op, categories, devise, nomCompte, surFermer, sur
   const objectifs = useObjectifs()
   const reglages = useReglages()
   const biens = useBiens()
+  const nav = useNav()
+  const [biensIgnore, setBiensIgnore] = useState(false)
   // « Imprévu, payé comment ? » : solde (ou carte), sécurité, épargne (et un projet)
   const compteOp = ctx?.comptes.find((c) => c.id === op.compteId)
   const comptePrincipal = compteOp?.type === 'carte_credit' ? compteOp.compteRemboursementId : op.compteId
@@ -123,6 +128,21 @@ export function Confirmation({ op, categories, devise, nomCompte, surFermer, sur
             {(choix === 'epargne' || choix.startsWith('projet:')) && compteEpargne && <> Un virement de {formaterMontant(op.montant, devise)} de {compteEpargne.nom} vers ton compte est enregistré : <b className="text-encre">fais-le aussi à ta banque</b>.</>}
           </p>}
         </div>
+      )}
+
+      {proposerAuxBiens(op, reglages?.seuilBiens ?? SEUIL_BIENS_DEFAUT) && !biensIgnore && (
+        <section className="rounded-[12px] bg-white p-3 shadow-carte" aria-label="Ajouter aux biens">
+          <p className="text-[15px] text-encre">📦 L’ajouter à tes biens ?</p>
+          <p className="text-[12px] text-encre-pale">Pour suivre sa valeur dans Patrimoine (prix, date et devise préremplis).</p>
+          <div className="mt-2 flex gap-2">
+            <button type="button" onClick={() => setBiensIgnore(true)} className="min-h-[42px] flex-1 rounded-[10px] bg-fond text-[15px] font-semibold text-encre-douce">Ignorer</button>
+            <button type="button" onClick={async () => {
+              await terminer()
+              const sous = op.sousCategorieId ? categories.find((c) => c.id === op.sousCategorieId)?.nom : undefined
+              nav.ouvrir(<EditionBien pre={{ nom: (note.trim() || op.note || sous) ?? '', prixAchat: op.montant, dateAcquisition: op.date, devise }} />)
+            }} className="min-h-[42px] flex-1 rounded-[10px] bg-bleu text-[15px] font-semibold text-white">Ajouter</button>
+          </div>
+        </section>
       )}
 
       {op.type === 'depense' && (biens ?? []).some((b) => !b.sortie) && (
