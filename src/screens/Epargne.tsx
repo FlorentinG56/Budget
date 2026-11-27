@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useState } from 'react'
-import { ajouterMouvement, convertirObjectif, enregistrerObjectif, supprimerMouvement } from '../db/actions'
+import { ajouterMouvement, convertirObjectif, enregistrerObjectif, supprimerMouvement, virementEpargne } from '../db/actions'
 import { db } from '../db/db'
 import { Feuille } from '../components/Feuille'
 import { Bouton, Champ, Choix, Groupe, Interrupteur, Saisie } from '../components/formulaire'
@@ -40,7 +40,9 @@ export function SectionEpargne() {
   const operations = useOperations()
   const reglages = useReglages()
   const [organiser, setOrganiser] = useState(false)
+  const [virement, setVirement] = useState<null | 'epargner' | 'retirer'>(null)
   if (!objectifs || !comptes || !operations || !reglages) return null
+  const principal = comptes.find((c) => c.type === 'cheque' && c.inclusBudgetJournalier && !c.archive)
 
   const date = aujourdhui()
   const mapComptes = indexer(comptes)
@@ -117,7 +119,14 @@ export function SectionEpargne() {
             ))}
           </div>
           <p className="mt-1.5 text-[12px] leading-snug text-encre-pale">C’est le solde réel de ton compte épargne. Les projets répartissent ce total, virtuellement : ils ne changent aucun compte.</p>
+          {principal && epargnes.some((c) => c.devise === principal.devise) && (
+            <div className="mt-3 flex gap-2">
+              <button type="button" onClick={() => setVirement('epargner')} className="min-h-[42px] flex-1 rounded-[10px] bg-fond text-[15px] font-semibold text-bleu active:bg-bleu-pale">↓ Épargner</button>
+              <button type="button" onClick={() => setVirement('retirer')} className="min-h-[42px] flex-1 rounded-[10px] bg-fond text-[15px] font-semibold text-bleu active:bg-bleu-pale">↑ Retirer</button>
+            </div>
+          )}
         </section>
+        {principal && <FeuilleVirementEpargne sens={virement} surFermer={() => setVirement(null)} principal={principal} />}
 
         <div className="flex items-end justify-between">
           <TitreSection>Projets</TitreSection>
@@ -133,6 +142,79 @@ export function SectionEpargne() {
 
       {termines.length > 0 && (<><TitreSection>Projets terminés</TitreSection><Groupe>{termines.map((o, i) => ligne(o, i, termines))}</Groupe></>)}
     </>
+  )
+}
+
+/**
+ * « Épargner » (compte principal → compte épargne) ou « Retirer » (compte épargne → compte principal) :
+ * un vrai virement, à refaire à la banque. Projet facultatif : il reçoit ou perd le même montant.
+ */
+function FeuilleVirementEpargne({ sens, surFermer, principal }: { sens: null | 'epargner' | 'retirer'; surFermer: () => void; principal: Compte }) {
+  const comptes = useComptes()
+  const objectifs = useObjectifs()
+  const operations = useOperations()
+  const [texte, setTexte] = useState('')
+  const [date, setDate] = useState(aujourdhui())
+  const [compteId, setCompteId] = useState('')
+  const [projetId, setProjetId] = useState('')
+  const [enCours, setEnCours] = useState(false)
+  useEffect(() => { if (sens) { setTexte(''); setDate(aujourdhui()); setProjetId(''); setCompteId('') } }, [sens])
+  if (!comptes || !objectifs || !operations) return null
+  const possibles = comptesEpargne(comptes).filter((c) => c.devise === principal.devise)
+  const compte = possibles.find((c) => c.id === compteId) ?? possibles[0]
+  if (!compte) return null
+  const retirer = sens === 'retirer'
+  const montant = lireMontant(texte)
+  const soldeEp = soldeCompte(compte, operations, aujourdhui())
+  const projets = projetsEpargne(objectifs, comptes).filter((o) => o.compteId === compte.id)
+  const projet = projets.find((o) => o.id === projetId)
+  const nonReparti = soldeEp - projets.reduce((t, o) => t + soldeObjectif(o, operations), 0)
+  const d = principal.devise
+  return (
+    <Feuille ouverte={sens !== null} surFermer={surFermer} titre={retirer ? 'Retirer de l’épargne' : 'Épargner'}>
+      <p className="mb-3 text-[15px] leading-snug text-encre-douce">
+        {retirer ? `De ${compte.nom} vers ${principal.nom}. L’argent redevient disponible sur ton compte.` : `De ${principal.nom} vers ${compte.nom}.`}
+      </p>
+      <div className="flex flex-col gap-2">
+        <ChampMontant valeur={texte} surChange={setTexte} devise={d} libelle="Montant" grand />
+        {possibles.length > 1 && (
+          <label className="flex min-h-[46px] items-center justify-between gap-2 rounded-[12px] bg-white px-3 text-[16px] shadow-carte">
+            <span className="text-encre-douce">Compte épargne</span>
+            <select value={compte.id} onChange={(e) => { setCompteId(e.target.value); setProjetId('') }} className="min-w-0 bg-transparent text-right text-encre outline-none" aria-label="Compte épargne">
+              {possibles.map((c) => <option key={c.id} value={c.id}>{c.nom}</option>)}
+            </select>
+          </label>
+        )}
+        {projets.length > 0 && (
+          <label className="flex min-h-[46px] items-center justify-between gap-2 rounded-[12px] bg-white px-3 text-[16px] shadow-carte">
+            <span className="text-encre-douce">{retirer ? 'Pris sur le projet' : 'Pour le projet'}</span>
+            <select value={projetId} onChange={(e) => setProjetId(e.target.value)} className="min-w-0 bg-transparent text-right text-encre outline-none" aria-label="Projet">
+              <option value="">{retirer ? 'Aucun (pas dans un projet)' : 'Aucun'}</option>
+              {projets.map((o) => <option key={o.id} value={o.id}>{o.nom} ({formaterMontant(soldeObjectif(o, operations), d)})</option>)}
+            </select>
+          </label>
+        )}
+        <label className="flex min-h-[46px] items-center justify-between rounded-[12px] bg-white px-3 text-[16px] shadow-carte">
+          <span className="text-encre-douce">Date</span>
+          <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} className="bg-transparent text-right text-encre outline-none" aria-label="Date du virement" />
+        </label>
+        {retirer && montant !== null && montant > soldeEp && <p className="px-1 text-[13px] text-rouge">C’est plus que le solde de {compte.nom} ({formaterMontant(soldeEp, d)}).</p>}
+        {retirer && montant !== null && !projet && projets.length > 0 && montant > nonReparti && montant <= soldeEp && (
+          <p className="px-1 text-[13px] leading-snug text-encre-douce">Seulement {formaterMontant(Math.max(0, nonReparti), d)} ne sont dans aucun projet : choisis le projet d’où vient cet argent.</p>
+        )}
+        {retirer && projet && montant !== null && montant > soldeObjectif(projet, operations) && <p className="px-1 text-[13px] text-encre-douce">C’est plus que le montant de « {projet.nom} ».</p>}
+        {!!montant && (
+          <p className="rounded-[10px] bg-white px-3 py-2 text-[13px] leading-snug text-encre shadow-carte">
+            ⚠️ Fais aussi le virement de <b>{formaterMontant(montant, d)}</b> {retirer ? `de ${compte.nom} vers ${principal.nom}` : `de ${principal.nom} vers ${compte.nom}`} dans l’app de ta banque.
+          </p>
+        )}
+        <Bouton disabled={!montant || enCours} onClick={async () => {
+          if (!montant || !sens) return
+          setEnCours(true)
+          try { await virementEpargne({ sens, comptePrincipalId: principal.id, compteEpargneId: compte.id, montant, date, projetId: projetId || undefined }); surFermer() } finally { setEnCours(false) }
+        }}>{retirer ? 'Retirer' : 'Épargner'}</Bouton>
+      </div>
+    </Feuille>
   )
 }
 

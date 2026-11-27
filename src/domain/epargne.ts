@@ -60,7 +60,7 @@ export function historiqueObjectif(o: ObjectifEpargne, operations: Operation[]):
     ...o.mouvements.map((m) => ({
       date: m.date, mouvementId: m.id,
       montant: m.sens === 'mise_de_cote' ? m.montant : -m.montant,
-      libelle: m.note || (m.source?.startsWith('fin:') ? 'Fin de quinzaine' : m.source?.startsWith('paie:') ? 'Mis de côté à la paie' : m.source?.startsWith('bilan:') ? 'Reste de la période' : m.source?.startsWith('acote:') ? 'Reste « à côté du budget »' : m.sens === 'mise_de_cote' ? 'Mis de côté' : 'Repris'),
+      libelle: m.note || (m.source?.startsWith('fin:') ? 'Fin de quinzaine' : m.source?.startsWith('virement:') ? (m.sens === 'reprise' ? 'Retiré du compte épargne' : 'Épargné') : m.source?.startsWith('paie:') ? 'Mis de côté à la paie' : m.source?.startsWith('bilan:') ? 'Reste de la période' : m.source?.startsWith('acote:') ? 'Reste « à côté du budget »' : m.sens === 'mise_de_cote' ? 'Mis de côté' : 'Repris'),
     })),
     ...operations.filter((op) => op.objectifEpargneId === o.id).map((op) => ({
       date: op.date, operationId: op.id, montant: -op.montant, libelle: op.note || 'Imprévu payé avec cet argent',

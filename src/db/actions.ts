@@ -78,11 +78,36 @@ async function synchroniserVirementLie(op: Operation, base: BudgetDB): Promise<v
 }
 
 export async function supprimerOperation(id: string, base: BudgetDB = db): Promise<void> {
-  await base.transaction('rw', base.operations, async () => {
+  await base.transaction('rw', base.operations, base.objectifs, async () => {
     const op = await base.operations.get(id)
     if (op?.virementLieId) await base.operations.delete(op.virementLieId)
     if (op?.lieA) await base.operations.update(op.lieA, { virementLieId: undefined })
+    // mouvement de projet créé avec ce virement (épargner / retirer) : supprimé avec lui
+    for (const o of await base.objectifs.toArray()) {
+      if (o.mouvements.some((m) => m.source === `virement:${id}`)) await base.objectifs.update(o.id, { mouvements: o.mouvements.filter((m) => m.source !== `virement:${id}`) })
+    }
     await base.operations.delete(id)
+  })
+}
+
+/**
+ * Onglet Épargne : « Épargner » (compte principal → compte épargne) ou « Retirer » (compte épargne → compte principal).
+ * Un vrai virement, à refaire à la banque. Avec un projet : le projet reçoit (épargner) ou perd (retirer) le même montant.
+ */
+export async function virementEpargne(v: { sens: 'epargner' | 'retirer'; comptePrincipalId: string; compteEpargneId: string; montant: Centimes; date: DateISO; projetId?: string }, base: BudgetDB = db): Promise<Operation> {
+  return base.transaction('rw', base.operations, base.objectifs, async () => {
+    const retirer = v.sens === 'retirer'
+    const op: Operation = {
+      id: nouvelId(), date: v.date, montant: v.montant, type: 'virement', creeLe: Date.now(),
+      compteId: retirer ? v.compteEpargneId : v.comptePrincipalId, compteDestinationId: retirer ? v.comptePrincipalId : v.compteEpargneId,
+      note: retirer ? 'Retrait d’épargne' : 'Épargne',
+    }
+    await base.operations.add(op)
+    const projet = v.projetId ? await base.objectifs.get(v.projetId) : undefined
+    if (projet) {
+      await base.objectifs.update(projet.id, { mouvements: [...projet.mouvements, { id: nouvelId(), date: v.date, montant: v.montant, sens: retirer ? 'reprise' : 'mise_de_cote', source: `virement:${op.id}` }] })
+    }
+    return op
   })
 }
 

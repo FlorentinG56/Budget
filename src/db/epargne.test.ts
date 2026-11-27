@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
 import { soldeObjectif } from '../domain/epargne'
 import { soldeCompte } from '../domain/soldes'
-import { ajouterMouvement, convertirObjectif, enregistrerObjectif, enregistrerOperation, supprimerOperation, synchroniserSecurite, terminerQuinzaine, validerPeriode } from './actions'
+import { ajouterMouvement, virementEpargne, convertirObjectif, enregistrerObjectif, enregistrerOperation, supprimerOperation, synchroniserSecurite, terminerQuinzaine, validerPeriode } from './actions'
 import { COMPTES_TEST, preparerUtilisateur } from './testUtils'
 import { BudgetDB, lireReglages } from './db'
 
@@ -131,6 +131,33 @@ describe('conversion des anciens objectifs', () => {
     expect((await base.objectifs.get(voyage.id))!.archive).toBe(true)
     expect((await base.objectifs.get(voyage.id))!.mouvements).toHaveLength(1)
     expect((await base.objectifs.get(euros.id))!.archive).toBe(true)
+    base.close()
+  })
+})
+
+describe('épargner et retirer depuis l’onglet Épargne', () => {
+  it('retirer 200 $ : virement épargne → compte principal ; avec un projet, il baisse aussi ; supprimer le virement annule tout', async () => {
+    const base = new BudgetDB('test-retrait-epargne')
+    await preparerUtilisateur(base)
+    await base.comptes.add(EPARGNE)
+    const ps5 = await enregistrerObjectif({ nom: 'PS5', compteId: 'ep' }, base)
+    await ajouterMouvement(ps5.id, { date: '2026-11-01', montant: 30000, sens: 'mise_de_cote' }, base)
+    const sansProjet = await virementEpargne({ sens: 'retirer', comptePrincipalId: 'chq', compteEpargneId: 'ep', montant: 20000, date: '2026-11-27' }, base)
+    expect([sansProjet.type, sansProjet.compteId, sansProjet.compteDestinationId, sansProjet.montant]).toEqual(['virement', 'ep', 'chq', 20000])
+    let ops = await base.operations.toArray()
+    expect(soldeCompte(EPARGNE, ops)).toBe(80000)
+    expect(soldeCompte(COMPTES_TEST[0], ops)).toBe(20000)
+    expect(soldeObjectif((await base.objectifs.get(ps5.id))!, ops)).toBe(30000) // aucun projet choisi
+    const avecProjet = await virementEpargne({ sens: 'retirer', comptePrincipalId: 'chq', compteEpargneId: 'ep', montant: 5000, date: '2026-11-27', projetId: ps5.id }, base)
+    expect(soldeObjectif((await base.objectifs.get(ps5.id))!, ops)).toBe(25000)
+    await virementEpargne({ sens: 'epargner', comptePrincipalId: 'chq', compteEpargneId: 'ep', montant: 10000, date: '2026-11-28', projetId: ps5.id }, base)
+    ops = await base.operations.toArray()
+    expect(soldeCompte(EPARGNE, ops)).toBe(85000)
+    expect(soldeObjectif((await base.objectifs.get(ps5.id))!, ops)).toBe(35000)
+    await supprimerOperation(avecProjet.id, base)
+    ops = await base.operations.toArray()
+    expect(soldeCompte(EPARGNE, ops)).toBe(90000)
+    expect(soldeObjectif((await base.objectifs.get(ps5.id))!, ops)).toBe(40000)
     base.close()
   })
 })
